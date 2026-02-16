@@ -1,11 +1,11 @@
 import logging
 import uvicorn
 from fastapi import FastAPI
-from database import engine
+from db import engine
 from models import Base
 from sqlalchemy.orm import Session
 from fastapi import Depends
-from database import SessionLocal
+from db import SessionLocal
 from models import Agent, Event
 import asyncio
 import random
