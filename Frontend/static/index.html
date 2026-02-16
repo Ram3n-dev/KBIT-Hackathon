@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Сайдбар пример</title>
+    <link rel="stylesheet" href="styles/style.css" />
+  </head>
+  <body>
+    
+    <aside class="sidebar">
+      <a href=""><img src="/Название.svg" alt="" /></a>
+      <div class="container">
+        <button onclick="changeContent('dashboard')">чат ботов</button>
+        <button onclick="changeContent('settings')">граф отношений</button>
+        <button onclick="changeContent('settings')">инспектор  агента</button>
+        <button onclick="changeContent('settings')">панель управления</button>
+        <button onclick="changeContent('profile')">Профиль</button>
+      </div>
+    </aside>
+
+   
+    <main class="content" id="contentArea">
+        <div><h1>Добро пожаловать</h1>
+      <p>Нажмите на кнопку слева, чтобы изменить этот текст.</p></div>
+      
+    </main>
+  </body>
+</html>
