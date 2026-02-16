@@ -1,0 +1,29 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: "Roboto", sans-serif;
+}
+
+/* Фон для всего body */
+body {
+  background-color: #faf2e5; /* Бежевый фон для всей страницы */
+  min-height: 100vh;
+}
+
+.app-container {
+  display: flex;
+  max-width: 1440px;
+  margin: 0 auto; /* Центрирование по середине */
+  background-color: #faf2e5; /* Тот же бежевый для контейнера */
+  width: 100%;
+}
+
+.main-content {
+  flex: 1;
+  margin: 25px 25px 25px 0;
+  background-color: #dbdaae;
+  border-radius: 40px;
+  padding: 30px;
+  min-height: 944px;
+}

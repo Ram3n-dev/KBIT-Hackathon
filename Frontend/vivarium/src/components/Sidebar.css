@@ -1,27 +1,8 @@
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-  font-family: "Roboto", sans-serif;
-}
-
-body {
-  display: flex;
-  flex-direction: row;
-  width: 100%; /* Блок занимает 100% ширины экрана (или родителя) */
-  max-width: 1440px; /* Но не может стать шире 1440px */
-  margin: 0 auto; /* Центрируется, если экран шире 1440px */
-  background-color: #faf2e5;
-}
-
-/* СЕКЦИЯ СЛЕВА (САЙДБАР)*/
-
 .sidebar {
   width: 535px;
   height: 944px;
   border-radius: 40px;
   background-color: #f1e8c7;
-  color: white;
   margin-top: 25px;
   margin-left: 25px;
   margin-right: 25px;
@@ -30,31 +11,23 @@ body {
 }
 
 .logo {
-  
   display: flex;
+
   align-items: center;
   justify-content: center;
   margin: 35px 109px 70px 109px;
 }
+
 .container-buttons {
   width: 331px;
+  height: 404px;
   display: flex;
   flex-direction: column;
   margin-left: 102px;
   margin-right: 102px;
 }
-/* СЕКЦИЯ СПРАВА (КОНТЕНТ) */
 
-.main-content {
-  width: 833px;
-  height: 944px;
-  background-color: #dbdaae;
-  border-radius: 40px;
-  margin-top: 25px;
-
-  margin-right: 25px;
-}
-button {
+.nav-btn {
   border-radius: 20px;
   padding: 10px;
   margin-bottom: 60px;
@@ -64,11 +37,18 @@ button {
   font-size: 24px;
   border: none;
   cursor: pointer;
+  text-decoration: none;
+  text-align: center;
 }
 
-button:hover {
+.nav-btn:hover {
   color: #f1e8c7;
   background-color: #5d6939;
+}
+
+.nav-btn.active {
+  background-color: #5d6939;
+  color: #f1e8c7;
 }
 
 .user {

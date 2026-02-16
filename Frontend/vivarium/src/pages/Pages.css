@@ -1,0 +1,45 @@
+.content-page {
+  color: #454135;
+}
+
+.content-page h1 {
+  font-size: 32px;
+  margin-bottom: 30px;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+.dashboard-card {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 20px;
+  padding: 20px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.card-value {
+  font-size: 36px;
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.card-trend {
+  font-size: 14px;
+}
+
+.card-trend.positive {
+  color: #2e7d32;
+}
+
+.card-trend.negative {
+  color: #c62828;
+}
