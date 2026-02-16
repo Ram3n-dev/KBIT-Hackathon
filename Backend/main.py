@@ -25,6 +25,8 @@ logger = logging.getLogger(__name__)
 simulation_task = None
 simulation_running = False
 
+
+#endpoint
 @app.get("/")
 def root():
     return {"status": "world alive"}
