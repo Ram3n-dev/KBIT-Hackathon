@@ -1,0 +1,184 @@
+/* Граф отношений */
+.graph-container {
+  display: flex;
+  gap: 20px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 20px;
+  padding: 20px;
+  min-height: 600px;
+  width: 100%;
+}
+
+.graph-wrapper {
+  flex: 3;
+  position: relative;
+  background: rgba(241, 232, 199, 0.3);
+  border-radius: 20px;
+  overflow: hidden;
+  min-height: 800px;
+  user-select: none;
+}
+
+.graph-zoom-container {
+  width: 100%;
+  height: 100%;
+  transition: transform 0.1s ease;
+}
+
+.relations-graph {
+  width: 100%;
+  height: 100%;
+  min-height: 600px;
+  display: block;
+}
+
+/* Стили для линий отношений */
+.relation-line {
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.relation-line:hover {
+  filter: brightness(1.2);
+}
+
+/* Стили для узлов агентов */
+.agent-node {
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.agent-node:hover {
+  r: 25;
+  filter: brightness(1.2);
+}
+
+.agent-label {
+  font-size: 12px;
+  font-weight: 500;
+  fill: #454135;
+  pointer-events: none;
+}
+
+.relation-value {
+  font-size: 11px;
+  fill: #5d6939;
+  font-weight: bold;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+/* Контролы зума */
+.zoom-controls {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  gap: 8px;
+  z-index: 10;
+}
+
+.zoom-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: #5d6939;
+  color: #f1e8c7;
+  font-size: 20px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.zoom-btn:hover {
+  background: #aab97e;
+  color: #454135;
+  transform: scale(1.1);
+}
+
+.zoom-btn.reset {
+  font-size: 18px;
+}
+
+/* Легенда */
+.graph-legend {
+  flex: 1;
+  background: #5d6939;
+  border-radius: 20px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  align-self: flex-start;
+  max-width: 200px;
+}
+
+.graph-legend h3 {
+  color: #f1e8c7;
+  font-size: 20px;
+  font-weight: 800;
+  margin: 0 0 10px 0;
+  text-align: center;
+}
+
+.legend-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  background: rgba(241, 232, 199, 0.1);
+  border-radius: 10px;
+  transition: all 0.2s ease;
+}
+
+.legend-item:hover {
+  background: rgba(241, 232, 199, 0.2);
+  transform: translateX(5px);
+}
+
+.legend-color {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.legend-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.legend-title {
+  color: #f1e8c7;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.legend-percent {
+  color: #aab97e;
+  font-size: 12px;
+}
+
+.legend-note {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(241, 232, 199, 0.3);
+}
+
+.legend-note p {
+  color: #f1e8c7;
+  font-size: 12px;
+  margin: 3px 0;
+}

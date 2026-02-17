@@ -1,0 +1,284 @@
+/* Инспектор агента */
+.inspector-page .inspector-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 30px;
+}
+
+.inspector-select-section {
+  background: #5d6939;
+  border-radius: 20px;
+  padding: 25px;
+  width: 100%;
+  max-width: 556px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.inspector-select-section h2 {
+  color: #f1e8c7;
+  font-size: 24px;
+  margin-bottom: 20px;
+  font-weight: 800;
+  text-align: center;
+}
+
+/* Кастомный выпадающий список */
+.custom-select {
+  position: relative;
+  width: 100%;
+  max-width: 408px;
+  margin: 0 auto;
+}
+
+.select-selected {
+  width: 100%;
+  padding: 15px;
+  border: none;
+  border-radius: 20px;
+  background: #f1e8c7;
+  font-size: 16px;
+  color: #454135;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.select-selected:hover {
+  background: #faf2e5;
+  outline: 2px solid #aab97e;
+}
+
+.select-items {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 250px;
+  overflow-y: auto;
+  background: #f1e8c7;
+  border-radius: 20px;
+  margin-top: 5px;
+  z-index: 100;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.select-item {
+  padding: 15px;
+  cursor: pointer;
+  color: #454135;
+  transition: all 0.2s ease;
+}
+
+.select-item:hover {
+  background: #aab97e;
+  color: #f1e8c7;
+}
+
+.select-item.selected {
+  background: #5d6939;
+  color: #f1e8c7;
+}
+
+/* Стилизация скроллбара для выпадающего списка */
+.select-items::-webkit-scrollbar {
+  width: 8px;
+}
+
+.select-items::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+}
+
+.select-items::-webkit-scrollbar-thumb {
+  background: #aab97e;
+  border-radius: 4px;
+}
+
+.select-items::-webkit-scrollbar-thumb:hover {
+  background: #5d6939;
+}
+
+/* Панель информации об агенте */
+.agent-info-panel {
+  background: #5d6939;
+  border-radius: 20px;
+  padding: 30px;
+  width: 100%;
+  max-width: 800px;
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+}
+
+/* Имя агента */
+.agent-name-header {
+  text-align: center;
+  margin-bottom: 10px;
+}
+
+.agent-name-header h3 {
+  color: #f1e8c7;
+  font-size: 28px;
+  font-weight: 800;
+  position: relative;
+  display: inline-block;
+  padding-bottom: 10px;
+}
+
+.agent-name-header h3::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 25%;
+  width: 50%;
+  height: 3px;
+  background: #aab97e;
+  border-radius: 2px;
+}
+
+/* Секция отношений */
+.relationships-section h4,
+.mood-section h4,
+.future-plans-section h4,
+.reflection-section h4 {
+  color: #f1e8c7;
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 15px;
+}
+
+.relationships-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.relationship-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 15px;
+  background: rgba(241, 232, 199, 0.1);
+  border-radius: 15px;
+  transition: all 0.2s ease;
+}
+
+.relationship-item:hover {
+  background: rgba(241, 232, 199, 0.2);
+  transform: translateX(5px);
+}
+
+.relationship-item .agent-name {
+  color: #f1e8c7;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.relationship-item .relationship-type {
+  padding: 5px 15px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: lowercase;
+}
+
+/* Секция настроения */
+.mood-display {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 15px;
+  background: rgba(241, 232, 199, 0.1);
+  border-radius: 15px;
+}
+
+.mood-emoji {
+  font-size: 32px;
+}
+
+.mood-text {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+/* Секция планов */
+.plans-list {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.plan-item {
+  padding: 12px 15px;
+  background: rgba(241, 232, 199, 0.1);
+  border-radius: 15px;
+  color: #f1e8c7;
+  font-size: 16px;
+  position: relative;
+  padding-left: 35px;
+  transition: all 0.2s ease;
+}
+
+.plan-item::before {
+  content: '•';
+  position: absolute;
+  left: 15px;
+  color: #aab97e;
+  font-size: 24px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.plan-item:hover {
+  background: rgba(241, 232, 199, 0.2);
+  padding-left: 40px;
+}
+
+/* Секция рефлексии */
+.thought-bubble {
+  background: #f1e8c7;
+  border-radius: 20px;
+  padding: 20px;
+  position: relative;
+  margin-top: 10px;
+}
+
+.thought-bubble::before {
+  content: '';
+  position: absolute;
+  top: -10px;
+  left: 30px;
+  width: 0;
+  height: 0;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-bottom: 10px solid #f1e8c7;
+}
+
+.thought-bubble p {
+  color: #454135;
+  font-size: 16px;
+  line-height: 1.5;
+  margin: 0;
+  font-style: italic;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+  .agent-info-panel {
+    padding: 20px;
+  }
+  
+  .relationship-item {
+    flex-direction: column;
+    gap: 10px;
+    text-align: center;
+  }
+  
+  .thought-bubble::before {
+    left: 20px;
+  }
+}
