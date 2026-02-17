@@ -26,7 +26,7 @@ pip install -r requirements.txt
 ```
 3. Настроить env:
 ```bash
-copy .env.example .env
+copy app.env.example app.env
 ```
 4. Запустить backend:
 ```bash
@@ -34,7 +34,7 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ## Подключение LLM (DeepSeek / GigaChat)
-В `.env` выставьте `LLM_PROVIDER`:
+В `app.env` выставьте `LLM_PROVIDER`:
 - `LLM_PROVIDER=deepseek`
 - `LLM_PROVIDER=gigachat`
 - `LLM_PROVIDER=none` (fallback-режим без внешнего LLM)
@@ -42,7 +42,7 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ### DeepSeek
 ```env
 LLM_PROVIDER=deepseek
-LLM_MODEL=deepseek-chat
+LLM_MODEL=deepseek/deepseek-v3.2
 DEEPSEEK_API_KEY=your_key
 DEEPSEEK_API_BASE=https://api.deepseek.com
 ```
@@ -80,13 +80,25 @@ LLM используется для:
 ```bash
 curl -X PATCH http://localhost:8000/llm/config ^
   -H "Content-Type: application/json" ^
-  -d "{\"provider\":\"deepseek\",\"model\":\"deepseek-chat\",\"deepseek_api_key\":\"YOUR_KEY\"}"
+  -d "{\"provider\":\"deepseek\",\"model\":\"deepseek/deepseek-v3.2\",\"deepseek_api_key\":\"YOUR_KEY\"}"
 ```
+
+### DeepSeek debug logs
+Для логов запросов/ответов DeepSeek используйте `app.env`:
+```env
+APP_LOG_LEVEL=INFO
+LLM_DEBUG_LOG_ENABLED=true
+LLM_DEBUG_LOG_PAYLOAD=true
+LLM_DEBUG_LOG_RESPONSE=true
+LLM_DEBUG_LOG_MAX_CHARS=2500
+```
+Логи пишутся в stdout (`logger: app.llm`) и показывают payload запроса, код/время ответа и тело ответа/ошибки (с обрезкой по лимиту символов).
 
 ## Эндпоинты для фронтенда
 - `GET /agents`
 - `POST /agents`
 - `GET /agents/{id}`
+- `DELETE /agents/{id}`
 - `GET /relations`
 - `GET /agents/{id}/relations`
 - `GET /agents/{id}/mood`

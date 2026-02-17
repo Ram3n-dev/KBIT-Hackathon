@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from datetime import datetime
 import json
+import logging
 
 from fastapi import Depends, FastAPI, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
@@ -35,6 +36,10 @@ from app.services.simulation import SimulationEngine
 
 
 settings = get_settings()
+logging.basicConfig(
+    level=getattr(logging, settings.app_log_level.upper(), logging.INFO),
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
 event_bus = EventBus()
 ws_hub = WsHub()
 sim_engine = SimulationEngine(event_bus, ws_hub)
@@ -130,6 +135,16 @@ async def get_agent_by_id(agent_id: int, db: AsyncSession = Depends(get_db)) -> 
     if not agent:
         raise HTTPException(status_code=404, detail="Агент не найден")
     return AgentOut.model_validate(agent)
+
+
+@app.delete("/agents/{agent_id}")
+async def delete_agent(agent_id: int, db: AsyncSession = Depends(get_db)) -> dict:
+    agent = await db.get(Agent, agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Агент не найден")
+    await db.delete(agent)
+    await db.commit()
+    return {"status": "ok", "deleted_id": agent_id}
 
 
 @app.get("/relations")

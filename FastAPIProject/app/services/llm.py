@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 import uuid
 from dataclasses import dataclass
@@ -11,11 +12,12 @@ import httpx
 
 from app.config import get_settings
 
+logger = logging.getLogger("app.llm")
 
 ProviderName = Literal["none", "deepseek", "gigachat"]
 
 PROVIDER_MODELS: dict[str, list[str]] = {
-    "deepseek": ["deepseek-chat", "deepseek-reasoner"],
+    "deepseek": ["deepseek/deepseek-v3.2", "deepseek-chat", "deepseek-reasoner"],
     "gigachat": ["GigaChat-2", "GigaChat", "GigaChat-Pro"],
 }
 
@@ -28,6 +30,10 @@ class LLMRuntimeConfig:
     temperature: float
     max_tokens: int
     timeout_seconds: float
+    llm_debug_log_enabled: bool
+    llm_debug_log_payload: bool
+    llm_debug_log_response: bool
+    llm_debug_log_max_chars: int
 
     deepseek_api_base: str
     deepseek_api_key: str | None
@@ -53,6 +59,10 @@ class LLMService:
             temperature=settings.llm_temperature,
             max_tokens=settings.llm_max_tokens,
             timeout_seconds=settings.llm_timeout_seconds,
+            llm_debug_log_enabled=settings.llm_debug_log_enabled,
+            llm_debug_log_payload=settings.llm_debug_log_payload,
+            llm_debug_log_response=settings.llm_debug_log_response,
+            llm_debug_log_max_chars=settings.llm_debug_log_max_chars,
             deepseek_api_base=settings.deepseek_api_base,
             deepseek_api_key=settings.deepseek_api_key,
             gigachat_api_base=settings.gigachat_api_base,
@@ -89,6 +99,10 @@ class LLMService:
             "has_gigachat_auth_key": bool(cfg.gigachat_auth_key),
             "has_gigachat_access_token": bool(cfg.gigachat_access_token or self._gigachat_token),
             "gigachat_verify_ssl": cfg.gigachat_verify_ssl,
+            "llm_debug_log_enabled": cfg.llm_debug_log_enabled,
+            "llm_debug_log_payload": cfg.llm_debug_log_payload,
+            "llm_debug_log_response": cfg.llm_debug_log_response,
+            "llm_debug_log_max_chars": cfg.llm_debug_log_max_chars,
         }
 
     def list_providers(self) -> list[dict[str, Any]]:
@@ -192,10 +206,55 @@ class LLMService:
             "max_tokens": cfg.max_tokens,
         }
         headers = {"Authorization": f"Bearer {cfg.deepseek_api_key}", "Content-Type": "application/json"}
-        async with httpx.AsyncClient(timeout=cfg.timeout_seconds) as client:
-            response = await client.post(url, json=payload, headers=headers)
-            response.raise_for_status()
-            return _extract_content(response.json())
+        started = time.perf_counter()
+
+        if cfg.llm_debug_log_enabled:
+            logger.info(
+                "deepseek request -> model=%s url=%s timeout=%s",
+                model,
+                url,
+                cfg.timeout_seconds,
+            )
+            if cfg.llm_debug_log_payload:
+                logger.info(
+                    "deepseek request payload: %s",
+                    _clip_text(json.dumps(_sanitize_payload(payload), ensure_ascii=False), cfg.llm_debug_log_max_chars),
+                )
+
+        try:
+            async with httpx.AsyncClient(timeout=cfg.timeout_seconds) as client:
+                response = await client.post(url, json=payload, headers=headers)
+                response.raise_for_status()
+                data = response.json()
+        except httpx.HTTPStatusError as exc:
+            if cfg.llm_debug_log_enabled:
+                status_code = exc.response.status_code if exc.response else "unknown"
+                raw_body = exc.response.text if exc.response else str(exc)
+                logger.error(
+                    "deepseek error <- status=%s latency_ms=%s body=%s",
+                    status_code,
+                    int((time.perf_counter() - started) * 1000),
+                    _clip_text(raw_body, cfg.llm_debug_log_max_chars),
+                )
+            return None
+        except Exception as exc:
+            if cfg.llm_debug_log_enabled:
+                logger.error("deepseek transport error <- %s", str(exc))
+            return None
+
+        if cfg.llm_debug_log_enabled:
+            logger.info(
+                "deepseek response <- status=%s latency_ms=%s",
+                200,
+                int((time.perf_counter() - started) * 1000),
+            )
+            if cfg.llm_debug_log_response:
+                logger.info(
+                    "deepseek response body: %s",
+                    _clip_text(json.dumps(data, ensure_ascii=False), cfg.llm_debug_log_max_chars),
+                )
+
+        return _extract_content(data)
 
     async def _chat_gigachat(self, system_prompt: str, user_prompt: str, model: str) -> str | None:
         cfg = self._config
@@ -261,6 +320,27 @@ def _extract_content(data: dict[str, Any]) -> str | None:
         return data["choices"][0]["message"]["content"]
     except Exception:
         return None
+
+
+def _sanitize_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    safe = dict(payload)
+    messages = []
+    for item in safe.get("messages", []):
+        msg = dict(item)
+        content = msg.get("content")
+        if isinstance(content, str):
+            msg["content"] = _clip_text(content, 1200)
+        messages.append(msg)
+    safe["messages"] = messages
+    return safe
+
+
+def _clip_text(text: str, max_chars: int) -> str:
+    if max_chars <= 0:
+        return ""
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars] + f"... [truncated {len(text) - max_chars} chars]"
 
 
 def _parse_agent_step_json(raw_text: str) -> dict[str, Any]:

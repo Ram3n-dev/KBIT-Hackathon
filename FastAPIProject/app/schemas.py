@@ -98,6 +98,10 @@ class LLMStatusOut(BaseModel):
     has_gigachat_auth_key: bool
     has_gigachat_access_token: bool
     gigachat_verify_ssl: bool
+    llm_debug_log_enabled: bool
+    llm_debug_log_payload: bool
+    llm_debug_log_response: bool
+    llm_debug_log_max_chars: int
 
 
 class LLMConfigPatch(BaseModel):
@@ -115,6 +119,10 @@ class LLMConfigPatch(BaseModel):
     gigachat_auth_url: str | None = None
     gigachat_scope: str | None = None
     gigachat_verify_ssl: bool | None = None
+    llm_debug_log_enabled: bool | None = None
+    llm_debug_log_payload: bool | None = None
+    llm_debug_log_response: bool | None = None
+    llm_debug_log_max_chars: int | None = Field(default=None, ge=200, le=20000)
     agent_system_prompt: str | None = None
     summary_system_prompt: str | None = None
 

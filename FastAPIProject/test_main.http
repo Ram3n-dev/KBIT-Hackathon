@@ -1,11 +1,56 @@
-# Test your FastAPI endpoints
+﻿# Test your FastAPI endpoints
 
 GET http://127.0.0.1:8000/
 Accept: application/json
 
 ###
 
-GET http://127.0.0.1:8000/hello/User
+GET http://127.0.0.1:8000/health
 Accept: application/json
 
 ###
+
+GET http://127.0.0.1:8000/agents
+Accept: application/json
+
+###
+
+POST http://127.0.0.1:8000/agents
+Content-Type: application/json
+
+{
+  "name": "Тестовый Агент",
+  "avatar": "🤖",
+  "avatarColor": "#4CAF50",
+  "avatarName": "Робот"
+}
+
+###
+
+DELETE http://127.0.0.1:8000/agents/1
+Accept: application/json
+
+###
+
+GET http://127.0.0.1:8000/llm/status
+Accept: application/json
+
+###
+
+GET http://127.0.0.1:8000/llm/providers
+Accept: application/json
+
+###
+
+PATCH http://127.0.0.1:8000/llm/config
+Content-Type: application/json
+
+{
+  "provider": "deepseek",
+  "model": "deepseek/deepseek-v3.2"
+}
+
+###
+
+POST http://127.0.0.1:8000/llm/test
+Accept: application/json
