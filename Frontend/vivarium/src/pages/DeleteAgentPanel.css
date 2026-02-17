@@ -1,0 +1,126 @@
+.delete-agent-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: flex-end;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease;
+}
+
+.delete-agent-panel {
+  width: 500px;
+  height: 100vh;
+  background: #5d6939;
+  border-radius: 40px 0 0 40px;
+  padding: 30px;
+  display: flex;
+  flex-direction: column;
+  animation: slideIn 0.3s ease;
+  box-shadow: -5px 0 15px rgba(0, 0, 0, 0.2);
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+}
+
+.panel-header h2 {
+  color: #f1e8c7;
+  font-size: 28px;
+  font-weight: 800;
+  margin: 0;
+}
+
+.delete-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.delete-content p {
+  color: #f1e8c7;
+  font-size: 18px;
+  margin-bottom: 20px;
+}
+
+.agent-select {
+  width: 100%;
+  padding: 15px;
+  border: none;
+  border-radius: 15px;
+  background: #f1e8c7;
+  font-size: 16px;
+  color: #454135;
+  margin-bottom: 20px;
+  cursor: pointer;
+}
+
+.agent-select:focus {
+  outline: 2px solid #aab97e;
+}
+
+.warning-message {
+  background: rgba(244, 67, 54, 0.2);
+  border-radius: 15px;
+  padding: 15px;
+  margin-bottom: 20px;
+}
+
+.warning-message p {
+  color: #f1e8c7;
+  font-size: 14px;
+  margin: 0;
+}
+
+.panel-actions {
+  display: flex;
+  gap: 15px;
+  margin-top: auto;
+}
+
+.cancel-btn,
+.delete-btn {
+  flex: 1;
+  padding: 15px;
+  border: none;
+  border-radius: 15px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cancel-btn {
+  background: rgba(241, 232, 199, 0.2);
+  color: #f1e8c7;
+}
+
+.cancel-btn:hover {
+  background: rgba(241, 232, 199, 0.3);
+}
+
+.delete-btn {
+  background: #d32f2f;
+  color: #f1e8c7;
+}
+
+.delete-btn:hover {
+  background: #b71c1c;
+  transform: scale(1.02);
+}
+
+.delete-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.delete-btn:disabled:hover {
+  background: #d32f2f;
+  transform: none;
+}

@@ -8,6 +8,7 @@
   margin-right: 25px;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .logo {
@@ -38,6 +39,7 @@
   cursor: pointer;
   text-decoration: none;
   text-align: center;
+  transition: all 0.3s ease;
 }
 
 .nav-btn:hover {
@@ -50,34 +52,167 @@
   color: #f1e8c7;
 }
 
-/* Последняя кнопка (панель управления) без отступа снизу */
+/* Последняя кнопка без отступа */
 .nav-btn:last-of-type {
   margin-bottom: 0;
 }
 
-.user {
+/* Grid для кнопок создания и удаления */
+.agent-actions-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+  margin-top: 30px;
+}
+
+.action-btn {
   display: flex;
-  margin: auto auto 40px auto;  /* центрирование с отступом снизу */
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  background: #aab97e;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 15px 10px;
+  border-radius: 20px;
   cursor: pointer;
   transition: all 0.3s ease;
-  overflow: hidden;
+  gap: 8px;
 }
 
-.user:hover {
-  transform: scale(1.1);
+.action-btn.create {
+  background-color: #aab97e;
+}
+
+.action-btn.create:hover {
+  background-color: #5d6939;
+  transform: scale(1.02);
+}
+
+.action-btn.delete {
+  background-color: #DBA07B;
+}
+
+.action-btn.delete:hover {
+  background-color: #9a6d52;
+  transform: scale(1.02);
+}
+
+.action-btn img {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+}
+
+.action-btn span {
+  color: #f1e8c7;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Секция пользователя внизу */
+.user-section {
+  margin: 0 102px 40px 102px;
+  width: 331px;
+  border-top: 2px solid rgba(69, 65, 53, 0.2);
+  padding-top: 20px;
+}
+
+/* Неавторизованный пользователь */
+.login-prompt {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 15px;
+  background: rgba(170, 185, 126, 0.2);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.login-prompt:hover {
+  background: rgba(170, 185, 126, 0.3);
+  transform: translateY(-2px);
+}
+
+.login-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: #aab97e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+
+.login-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.login-text span {
+  color: #454135;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.login-text small {
+  color: #8b8b7a;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+/* Авторизованный пользователь */
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 15px;
+  background: rgba(93, 105, 57, 0.1);
+  border-radius: 20px;
+}
+
+.user-avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
   background: #5d6939;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  color: #f1e8c7;
 }
 
-.user img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+.user-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
-.user:active {
-  transform: scale(0.95);
+.user-name {
+  color: #454135;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.user-email {
+  color: #8b8b7a;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.logout-btn {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 12px;
+  background: #aab97e;
+  color: #454135;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.logout-btn:hover {
+  background: #5d6939;
+  color: #f1e8c7;
 }

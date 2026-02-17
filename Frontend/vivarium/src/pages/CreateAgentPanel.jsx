@@ -1,6 +1,7 @@
 import { useState } from "react";
 import "./CreateAgentPanel.css";
 import api from "../services/api";
+import ava from "../img/Union.svg";
 
 const avatarOptions = [
   { id: 1, svg: "🤖", color: "#4CAF50", name: "Робот" },

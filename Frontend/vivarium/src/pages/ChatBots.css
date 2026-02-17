@@ -1,0 +1,132 @@
+.chat-bots-page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-container {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 20px;
+  padding: 20px;
+  min-height: 600px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Область сообщений */
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  padding-right: 10px;
+}
+
+/* Обертка для сообщения */
+.message-wrapper {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+}
+
+.message-wrapper.with-avatar {
+  margin-top: 5px;
+}
+
+.message-wrapper.without-avatar {
+  margin-top: 2px;
+}
+
+/* Аватар */
+.message-avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  color: #f1e8c7;
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+
+/* Блок сообщения */
+.message-block {
+  flex: 1;
+  min-width: 0; /* Для корректной работы с flex */
+  max-width: calc(100% - 160px); /* Оставляем место для времени и аватара */
+}
+
+/* Имя автора */
+.message-author {
+  color: #f1e8c7;
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  margin-left: 4px;
+}
+
+/* Пузырь сообщения */
+.message-bubble {
+  display: inline-block;
+  max-width: 100%;
+  background: #5d6939;
+  border-radius: 18px;
+  padding: 12px 16px;
+  word-wrap: break-word;
+}
+
+.message-bubble p {
+  margin: 0;
+  color: #f1e8c7;
+  font-size: 16px;
+  line-height: 1.5;
+  white-space: pre-wrap; /* Сохраняем переносы строк */
+  word-break: break-word; /* Переносим длинные слова */
+}
+
+/* Время сообщения */
+.message-time {
+  color: #8b8b7a;
+  font-size: 12px;
+  flex-shrink: 0;
+  align-self: flex-end;
+  margin-left: auto;
+  padding-bottom: 8px;
+}
+
+/* Стилизация скроллбара */
+.chat-messages::-webkit-scrollbar {
+  width: 8px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+  background: #aab97e;
+  border-radius: 4px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+  background: #5d6939;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+  .message-block {
+    max-width: calc(100% - 100px);
+  }
+  
+  .message-avatar {
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
+  }
+}
