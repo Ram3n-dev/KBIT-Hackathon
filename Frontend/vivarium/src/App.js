@@ -22,27 +22,48 @@ function App() {
   // Проверка авторизации при загрузке
   useEffect(() => {
     const token = localStorage.getItem("token");
-    if (token) {
-      checkAuth(token);
+    const savedUser = localStorage.getItem("user");
+    
+    if (token && savedUser) {
+      // Сначала устанавливаем из localStorage для быстрого отображения
+      setUser(JSON.parse(savedUser));
+      setIsAuthenticated(true);
+      
+      // Затем проверяем валидность токена и получаем актуальные данные
+      verifyAuth(token);
     }
   }, []);
+
+  const verifyAuth = async (token) => {
+    try {
+      // Проверяем валидность токена и получаем профиль
+      const profile = await api.getProfile();
+      const userData = {
+        id: profile.id,
+        name: profile.username,
+        email: profile.email,
+        avatar: profile.avatar || "👤"
+      };
+      setUser(userData);
+      localStorage.setItem("user", JSON.stringify(userData));
+      setIsAuthenticated(true);
+    } catch (error) {
+      // Если токен невалидный - очищаем всё
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      setUser(null);
+      setIsAuthenticated(false);
+    }
+  };
 
   // Загрузка агентов при авторизации
   useEffect(() => {
     if (isAuthenticated) {
       loadAgents();
+    } else {
+      setAgents([]);
     }
   }, [isAuthenticated]);
-
-  const checkAuth = async (token) => {
-    try {
-      const userData = await api.checkAuth(token);
-      setUser(userData);
-      setIsAuthenticated(true);
-    } catch (error) {
-      localStorage.removeItem("token");
-    }
-  };
 
   const loadAgents = async () => {
     try {
@@ -74,7 +95,6 @@ function App() {
     }
     try {
       await api.deleteAgent(agentId);
-      // Обновляем список после удаления
       setAgents(agents.filter((agent) => agent.id !== agentId));
       setIsDeletePanelOpen(false);
     } catch (error) {
@@ -85,7 +105,7 @@ function App() {
   const handleLogin = async (username, password) => {
     try {
       const response = await api.login(username, password);
-      localStorage.setItem("token", response.token);
+      // Данные уже сохраняются в api.js, но дублируем для надежности
       setUser(response.user);
       setIsAuthenticated(true);
       setIsAuthModalOpen(false);
@@ -98,7 +118,6 @@ function App() {
   const handleRegister = async (username, email, password) => {
     try {
       const response = await api.register(username, email, password);
-      localStorage.setItem("token", response.token);
       setUser(response.user);
       setIsAuthenticated(true);
       setIsAuthModalOpen(false);
@@ -108,12 +127,19 @@ function App() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    api.token = null;
-    setUser(null);
-    setIsAuthenticated(false);
-    setAgents([]); // Очищаем список агентов при выходе
+  const handleLogout = async () => {
+    try {
+      await api.logout();
+    } catch (error) {
+      console.error("Ошибка при выходе:", error);
+    } finally {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      api.token = null;
+      setUser(null);
+      setIsAuthenticated(false);
+      setAgents([]);
+    }
   };
 
   return (
