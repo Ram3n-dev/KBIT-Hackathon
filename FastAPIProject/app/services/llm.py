@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import random
+import re
 import time
 import uuid
 from dataclasses import dataclass
@@ -256,6 +257,8 @@ class LLMService:
         temperature_override: float | None = None,
         max_tokens_override: int | None = None,
     ) -> str | None:
+        system_prompt = _repair_mojibake_text(system_prompt)
+        user_prompt = _repair_mojibake_text(user_prompt)
         cfg = self._config
         try:
             if cfg.provider == "deepseek":
@@ -449,6 +452,18 @@ def _clip_text(text: str, max_chars: int) -> str:
     if len(text) <= max_chars:
         return text
     return text[:max_chars] + f"... [truncated {len(text) - max_chars} chars]"
+
+
+def _repair_mojibake_text(text: str) -> str:
+    if not text:
+        return text
+    if not re.search(r"[РС][\u0400-\u04FF]", text):
+        return text
+    try:
+        repaired = text.encode("cp1251").decode("utf-8")
+    except UnicodeError:
+        return text
+    return repaired if repaired.strip() else text
 
 
 def _parse_agent_step_json(raw_text: str) -> dict[str, Any]:
