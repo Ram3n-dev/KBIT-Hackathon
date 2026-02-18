@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Annotated
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
@@ -7,7 +8,7 @@ class AgentCreate(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     name: str = Field(min_length=1, max_length=120)
-    avatarFile: str | None = Field(default=None, validation_alias=AliasChoices("avatarFile", "avatar"))
+    avatarFile: Annotated[str | None, Field(validation_alias=AliasChoices("avatarFile", "avatar"))] = None
     avatarColor: str = "#4CAF50"
     avatarName: str = "Agent"
     personality: str | None = None
@@ -28,7 +29,7 @@ class AgentUpdate(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     name: str | None = Field(default=None, min_length=1, max_length=120)
-    avatarFile: str | None = Field(default=None, validation_alias=AliasChoices("avatarFile", "avatar"))
+    avatarFile: Annotated[str | None, Field(validation_alias=AliasChoices("avatarFile", "avatar"))] = None
     avatarColor: str | None = None
     avatarName: str | None = None
     personality: str | None = None
