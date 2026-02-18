@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 import logging
@@ -227,8 +227,11 @@ class LLMService:
         ]
         history = "\n".join(f"- {m}" for m in clipped_history) if clipped_history else "- (нет истории)"
         system_prompt = (
-            "Ты пишешь реплику в чате ботов. Стиль: неформально, как студенты, живо и по делу, без кринжа. "
-            "Верни только одну реплику на русском, без кавычек, 1-2 предложения."
+            "Ты пишешь реплику в живом студенческом диалоге между агентами. "
+            "Продолжай текущую мысль и добавляй конкретику. "
+            "Запрещены шаблоны: 'после того что произошло', 'это важно:', 'давай обсудим', 'у меня мысль по поводу'. "
+            "Не повторяй формулировки из последних сообщений. "
+            "Верни одну реплику на русском, 1-2 предложения, без кавычек."
         )
         user_prompt = (
             f"Кто говорит: {actor_name}\n"
@@ -238,27 +241,69 @@ class LLMService:
             f"Тема: {_clip_text(topic, 220)}\n"
             f"Недавние сообщения:\n{history}"
         )
-        text = await self._chat(system_prompt, user_prompt)
+        text = await self._chat(
+            system_prompt,
+            user_prompt,
+            temperature_override=min(self._config.temperature, 0.55),
+            max_tokens_override=min(self._config.max_tokens, 160),
+        )
         return text.strip() if text else None
 
-    async def _chat(self, system_prompt: str, user_prompt: str) -> str | None:
+    async def _chat(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        temperature_override: float | None = None,
+        max_tokens_override: int | None = None,
+    ) -> str | None:
         cfg = self._config
         try:
             if cfg.provider == "deepseek":
-                text = await self._chat_deepseek(system_prompt, user_prompt, cfg.model)
+                text = await self._chat_deepseek(
+                    system_prompt,
+                    user_prompt,
+                    cfg.model,
+                    temperature_override=temperature_override,
+                    max_tokens_override=max_tokens_override,
+                )
                 if text or not cfg.fallback_model:
                     return text
-                return await self._chat_deepseek(system_prompt, user_prompt, cfg.fallback_model)
+                return await self._chat_deepseek(
+                    system_prompt,
+                    user_prompt,
+                    cfg.fallback_model,
+                    temperature_override=temperature_override,
+                    max_tokens_override=max_tokens_override,
+                )
             if cfg.provider == "gigachat":
-                text = await self._chat_gigachat(system_prompt, user_prompt, cfg.model)
+                text = await self._chat_gigachat(
+                    system_prompt,
+                    user_prompt,
+                    cfg.model,
+                    temperature_override=temperature_override,
+                    max_tokens_override=max_tokens_override,
+                )
                 if text or not cfg.fallback_model:
                     return text
-                return await self._chat_gigachat(system_prompt, user_prompt, cfg.fallback_model)
+                return await self._chat_gigachat(
+                    system_prompt,
+                    user_prompt,
+                    cfg.fallback_model,
+                    temperature_override=temperature_override,
+                    max_tokens_override=max_tokens_override,
+                )
         except Exception:
             return None
         return None
 
-    async def _chat_deepseek(self, system_prompt: str, user_prompt: str, model: str) -> str | None:
+    async def _chat_deepseek(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        model: str,
+        temperature_override: float | None = None,
+        max_tokens_override: int | None = None,
+    ) -> str | None:
         cfg = self._config
         if not cfg.deepseek_api_key:
             return None
@@ -267,8 +312,8 @@ class LLMService:
         payload = {
             "model": model,
             "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
-            "temperature": cfg.temperature,
-            "max_tokens": cfg.max_tokens,
+            "temperature": temperature_override if temperature_override is not None else cfg.temperature,
+            "max_tokens": max_tokens_override if max_tokens_override is not None else cfg.max_tokens,
         }
         headers = {"Authorization": f"Bearer {cfg.deepseek_api_key}", "Content-Type": "application/json"}
         started = time.perf_counter()
@@ -312,7 +357,14 @@ class LLMService:
 
         return _extract_content(data)
 
-    async def _chat_gigachat(self, system_prompt: str, user_prompt: str, model: str) -> str | None:
+    async def _chat_gigachat(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        model: str,
+        temperature_override: float | None = None,
+        max_tokens_override: int | None = None,
+    ) -> str | None:
         cfg = self._config
         token = await self._get_gigachat_token()
         if not token:
@@ -322,8 +374,8 @@ class LLMService:
         payload = {
             "model": model,
             "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
-            "temperature": cfg.temperature,
-            "max_tokens": cfg.max_tokens,
+            "temperature": temperature_override if temperature_override is not None else cfg.temperature,
+            "max_tokens": max_tokens_override if max_tokens_override is not None else cfg.max_tokens,
         }
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
         async with httpx.AsyncClient(timeout=cfg.timeout_seconds, verify=cfg.gigachat_verify_ssl) as client:

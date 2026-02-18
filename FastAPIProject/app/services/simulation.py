@@ -1,5 +1,7 @@
-﻿import asyncio
+import asyncio
 import random
+import re
+from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import select
@@ -22,28 +24,25 @@ MOODS = [
     ("Раздражен", "😠", "#F44336", 0.12),
 ]
 
-PLANS = [
-    "Исследовать новое место",
-    "Поговорить с соседом",
-    "Осмыслить недавнее событие",
-    "Помочь другому агенту",
-    "Спланировать совместный проект",
+NEUTRAL_TOPICS = [
+    "как распределить задачи на сегодня",
+    "какой следующий шаг у команды",
+    "что мешает продвинуться быстрее",
+    "как улучшить взаимодействие между нами",
 ]
 
-ACTIONS = [
-    "обсудил идею",
-    "предложил сотрудничество",
-    "вспомнил важный момент",
-    "высказал сомнение",
-    "похвалил товарища",
+BAD_PATTERNS = [
+    "после того что произошло",
+    "это важно:",
+    "давай обсудим",
+    "у меня мысль по поводу",
 ]
 
-TOPICS = [
-    "новое событие в мире",
-    "совместные планы",
-    "отношения в команде",
-    "ресурсы и риски",
-]
+
+@dataclass
+class ConversationState:
+    topic: str
+    remaining_turns: int
 
 
 class SimulationEngine:
@@ -55,6 +54,9 @@ class SimulationEngine:
         self._llm = get_llm_service()
         self._last_step_llm_at: dict[int, datetime] = {}
         self._last_dialogue_llm_at: dict[int, datetime] = {}
+        self._last_sent_at: dict[int, datetime] = {}
+        self._pending_reply: dict[int, int] = {}
+        self._pair_topics: dict[tuple[int, int], ConversationState] = {}
         self._running = True
 
     async def start(self) -> None:
@@ -98,19 +100,21 @@ class SimulationEngine:
             agents = list((await session.scalars(select(Agent).order_by(Agent.id.asc()))).all())
             if len(agents) < 2:
                 return
+            by_id = {a.id: a for a in agents}
 
-            actor = random.choice(agents)
-            others = [a for a in agents if a.id != actor.id]
-            target = random.choice(others)
+            pair = self._pick_actor_target(by_id)
+            if not pair:
+                return
+            actor, target = pair
 
-            rel = await _get_or_create_relation(session, actor.id, target.id)
-            # Чем ниже эмпатия, тем выше шанс пропуска сообщения
-            if random.random() > max(0.15, rel.score):
+            if self._is_agent_on_cooldown(actor.id):
                 return
 
-            memories = await retrieve_relevant_memories(session, actor.id, f"{target.name} общение", k=3)
-            reflective_hint = f" Вспоминает: {memories[0][:140]}" if memories else ""
+            rel = await _get_or_create_relation(session, actor.id, target.id)
+            if random.random() > max(0.08, rel.score * 0.50):
+                return
 
+            memories = await retrieve_relevant_memories(session, actor.id, f"{target.name} диалог", k=3)
             llm_step = None
             if self._can_use_llm(self._last_step_llm_at, actor.id):
                 llm_step = await self._llm.generate_agent_step(
@@ -123,25 +127,10 @@ class SimulationEngine:
                 if llm_step:
                     self._last_step_llm_at[actor.id] = datetime.utcnow()
 
-            plan_text = (llm_step or {}).get("plan") or random.choice(PLANS)
-            action = (llm_step or {}).get("action") or random.choice(ACTIONS)
-            relation_delta = (llm_step or {}).get("relation_delta", random.uniform(-0.08, 0.12))
-            try:
-                relation_delta = float(relation_delta)
-            except Exception:
-                relation_delta = random.uniform(-0.08, 0.12)
-
             latest_event = await _latest_user_event(session, actor.created_at)
-            force_event_reaction = False
-            if latest_event and not await _has_agent_reacted_to_event(session, actor.id, latest_event.id):
-                force_event_reaction = True
+            force_event_reaction = bool(latest_event and not await _has_agent_reacted_to_event(session, actor.id, latest_event.id))
+            topic = self._select_topic(actor, target, latest_event.text if latest_event else None, force_event_reaction)
 
-            if force_event_reaction:
-                topic = latest_event.text
-            elif latest_event and random.random() < 0.2:
-                topic = latest_event.text
-            else:
-                topic = random.choice(TOPICS)
             recent_chat = await _recent_chat_context(session, actor.id, target.id)
             llm_chat = None
             if self._can_use_llm(self._last_dialogue_llm_at, actor.id):
@@ -155,16 +144,44 @@ class SimulationEngine:
                 )
                 if llm_chat:
                     self._last_dialogue_llm_at[actor.id] = datetime.utcnow()
-            chat_text = llm_chat or _fallback_chat_message(target.name, action, topic)
-            chat_text = chat_text.strip()
-            if await _is_duplicate_chat(session, actor.id, target.id, chat_text):
+
+            if not llm_chat:
                 return
 
-            event_text = f"{actor.name} {action} с {target.name}."
+            chat_text = _clean_message(llm_chat)
+            if not _is_quality_message(chat_text):
+                # one retry with explicit anti-template guard
+                retry_prompt = f"{topic}. Сформулируй мысль иначе: без шаблонов и повторов, только конкретика."
+                retry = await self._llm.generate_dialogue_message(
+                    actor_name=actor.name,
+                    actor_personality=actor.personality,
+                    actor_mood=actor.mood_text,
+                    target_name=target.name,
+                    topic=retry_prompt,
+                    recent_messages=recent_chat,
+                )
+                if not retry:
+                    return
+                chat_text = _clean_message(retry)
+                if not _is_quality_message(chat_text):
+                    return
 
+            if await _is_duplicate_chat(session, actor.id, target.id, chat_text):
+                return
+            if await _is_repetitive_chat(session, actor.id, chat_text):
+                return
+
+            plan_text = (llm_step or {}).get("plan") or f"Согласовать с {target.name} следующий практический шаг по теме '{topic}'."
+            action = (llm_step or {}).get("action") or "уточнил(а) позицию и зафиксировал(а) следующий шаг"
+            relation_delta = (llm_step or {}).get("relation_delta", random.uniform(-0.03, 0.06))
+            try:
+                relation_delta = float(relation_delta)
+            except Exception:
+                relation_delta = random.uniform(-0.03, 0.06)
+
+            event_text = f"{actor.name} скорректировал(а) план после диалога с {target.name}."
             actor.reflection = (llm_step or {}).get("reflection") or (
-                f"Я думаю о {target.name} и хочу действовать осмысленно. "
-                f"Последняя мысль: {event_text[:120]}{reflective_hint}"
+                f"Я веду разговор с {target.name} по теме '{topic}' и держу фокус на конкретных шагах."
             )
             actor.current_plan = plan_text
             session.add(Plan(agent_id=actor.id, text=plan_text, active=True))
@@ -184,10 +201,9 @@ class SimulationEngine:
             session.add(event)
             session.add(chat_msg)
 
-            await add_memory(session, actor.id, f"Я сказал {target.name}: {chat_text}", source="chat")
+            await add_memory(session, actor.id, f"Я написал {target.name}: {chat_text}", source="chat")
             await add_memory(session, target.id, f"{actor.name} написал мне: {chat_text}", source="chat")
             await add_memory(session, actor.id, event_text, source="agent_action")
-            await add_memory(session, target.id, f"{actor.name}: {event_text}", source="social")
             if force_event_reaction and latest_event:
                 await add_memory(
                     session,
@@ -195,7 +211,10 @@ class SimulationEngine:
                     f"Я отреагировал на событие: {latest_event.text}",
                     source=f"evt_rx_{latest_event.id}",
                 )
+
             await session.commit()
+
+            self._mark_turn(actor.id, target.id)
 
             payload_event = {
                 "type": "event",
@@ -220,6 +239,56 @@ class SimulationEngine:
             await self._event_bus.publish(payload_chat)
             await self._ws_hub.broadcast(payload_event)
             await self._ws_hub.broadcast(payload_chat)
+
+    def _pick_actor_target(self, by_id: dict[int, Agent]) -> tuple[Agent, Agent] | None:
+        # Prefer pending response to get natural turn-taking.
+        pending_candidates = [aid for aid in self._pending_reply.keys() if aid in by_id and self._pending_reply[aid] in by_id]
+        if pending_candidates and random.random() < 0.75:
+            actor_id = random.choice(pending_candidates)
+            target_id = self._pending_reply.pop(actor_id)
+            if actor_id != target_id:
+                return by_id[actor_id], by_id[target_id]
+
+        agents = list(by_id.values())
+        actor = random.choice(agents)
+        others = [a for a in agents if a.id != actor.id]
+        if not others:
+            return None
+        target = random.choice(others)
+        return actor, target
+
+    def _select_topic(self, actor: Agent, target: Agent, latest_event_text: str | None, force_event: bool) -> str:
+        key = tuple(sorted((actor.id, target.id)))
+        state = self._pair_topics.get(key)
+
+        if force_event and latest_event_text:
+            topic = latest_event_text
+            self._pair_topics[key] = ConversationState(topic=topic, remaining_turns=random.randint(3, 5))
+            return topic
+
+        if state and state.remaining_turns > 0:
+            state.remaining_turns -= 1
+            return state.topic
+
+        if actor.current_plan and actor.current_plan.strip():
+            topic = f"{actor.current_plan.strip()}"
+        elif latest_event_text and random.random() < 0.35:
+            topic = latest_event_text
+        else:
+            topic = random.choice(NEUTRAL_TOPICS)
+
+        self._pair_topics[key] = ConversationState(topic=topic, remaining_turns=random.randint(2, 4))
+        return topic
+
+    def _mark_turn(self, actor_id: int, target_id: int) -> None:
+        self._last_sent_at[actor_id] = datetime.utcnow()
+        self._pending_reply[target_id] = actor_id
+
+    def _is_agent_on_cooldown(self, agent_id: int) -> bool:
+        last = self._last_sent_at.get(agent_id)
+        if not last:
+            return False
+        return (datetime.utcnow() - last).total_seconds() < 12
 
     def _can_use_llm(self, store: dict[int, datetime], agent_id: int) -> bool:
         last = store.get(agent_id)
@@ -271,9 +340,38 @@ async def _is_duplicate_chat(session, sender_id: int, receiver_id: int, text: st
     last = await session.scalar(stmt)
     if not last:
         return False
-    new_text = " ".join(text.lower().split())
-    old_text = " ".join((last.text or "").lower().split())
+    new_text = _normalize_text(text)
+    old_text = _normalize_text(last.text or "")
     return new_text == old_text
+
+
+async def _is_repetitive_chat(session, sender_id: int, text: str) -> bool:
+    stmt = (
+        select(ChatMessage)
+        .where(ChatMessage.sender_agent_id == sender_id)
+        .order_by(ChatMessage.created_at.desc())
+        .limit(6)
+    )
+    rows = list((await session.scalars(stmt)).all())
+    if not rows:
+        return False
+
+    new_text = _normalize_text(text)
+    new_tokens = set(new_text.split())
+    if not new_tokens:
+        return True
+
+    for row in rows:
+        old_text = _normalize_text(row.text or "")
+        old_tokens = set(old_text.split())
+        if not old_tokens:
+            continue
+        if new_text == old_text:
+            return True
+        overlap = len(new_tokens & old_tokens) / max(1, len(new_tokens | old_tokens))
+        if overlap >= 0.78:
+            return True
+    return False
 
 
 async def _latest_user_event(session, not_before: datetime | None = None) -> Event | None:
@@ -293,7 +391,6 @@ async def _latest_user_event(session, not_before: datetime | None = None) -> Eve
     if created_at.tzinfo is not None:
         created_at = created_at.replace(tzinfo=None)
 
-    # Event is considered "active topic" for a limited window.
     age_seconds = (datetime.utcnow() - created_at).total_seconds()
     if age_seconds > 10 * 60:
         return None
@@ -307,14 +404,39 @@ async def _has_agent_reacted_to_event(session, agent_id: int, event_id: int) -> 
     return row is not None
 
 
-def _fallback_chat_message(target_name: str, action: str, topic: str) -> str:
-    variants = [
-        f"{target_name}, я {action}. По теме: {topic}. Что думаешь?",
-        f"{target_name}, у меня мысль по поводу '{topic}'. Давай коротко сверим позиции.",
-        f"{target_name}, после того что произошло ({topic}), нужно договориться как действуем дальше.",
-        f"{target_name}, это важно: {topic}. Я предлагаю обсудить спокойно и по делу.",
-    ]
-    return random.choice(variants)
+def _clean_message(text: str) -> str:
+    cleaned = " ".join(text.strip().split())
+    cleaned = cleaned.replace("\n", " ").replace("\r", " ")
+    return cleaned
+
+
+def _is_quality_message(text: str) -> bool:
+    norm = _normalize_text(text)
+    if not norm:
+        return False
+    if len(norm) < 18 or len(norm) > 260:
+        return False
+
+    for p in BAD_PATTERNS:
+        if p in norm:
+            return False
+
+    # avoid over-repetition of same token
+    tokens = norm.split()
+    unique_ratio = len(set(tokens)) / max(1, len(tokens))
+    if unique_ratio < 0.45:
+        return False
+
+    # at most 2-3 short sentences
+    if text.count(".") + text.count("!") + text.count("?") > 3:
+        return False
+    return True
+
+
+def _normalize_text(text: str) -> str:
+    t = text.lower().replace("ё", "е")
+    t = re.sub(r"[^a-zа-я0-9\s]", " ", t)
+    return " ".join(t.split())
 
 
 def _mood_from_relation(score: float) -> tuple[str, str, str, float]:
