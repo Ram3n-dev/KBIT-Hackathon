@@ -71,6 +71,7 @@ ws_hub = WsHub()
 sim_engine = SimulationEngine(event_bus, ws_hub)
 llm_service = get_llm_service()
 bearer = HTTPBearer(auto_error=False)
+CHAT_DB_MAX_LEN = 120
 
 
 @asynccontextmanager
@@ -245,8 +246,8 @@ async def create_agent(payload: AgentCreate, db: AsyncSession = Depends(get_db))
         sender_type="agent",
         sender_agent_id=agent.id,
         receiver_agent_id=None,
-        text=greeting,
-        topic="intro",
+        text=_db_fit(greeting),
+        topic=_db_fit("intro"),
     )
     db.add(chat_greeting)
     await add_memory(db, agent.id, f"Я поприветствовал(а) всех: {greeting}", source="chat")
@@ -505,8 +506,8 @@ async def send_message(payload: MessageCreate, db: AsyncSession = Depends(get_db
             sender_type="user",
             sender_agent_id=None,
             receiver_agent_id=payload.agentId,
-            text=payload.text.strip(),
-            topic="direct",
+            text=_db_fit(payload.text.strip()),
+            topic=_db_fit("direct"),
         )
     )
     await add_memory(db, payload.agentId, f"Пользователь сказал: {payload.text}", source="user_message")
@@ -587,8 +588,8 @@ async def send_chat_message(payload: ChatMessageCreate, db: AsyncSession = Depen
         sender_type=sender_type,
         sender_agent_id=sender_agent_id,
         receiver_agent_id=receiver_agent_id,
-        text=text,
-        topic=payload.topic,
+        text=_db_fit(text),
+        topic=_db_fit(payload.topic),
     )
     db.add(row)
 
@@ -876,8 +877,8 @@ async def _create_world_event(db: AsyncSession, text: str) -> dict:
         sender_type="system",
         sender_agent_id=None,
         receiver_agent_id=None,
-        text=text,
-        topic="event",
+        text=_db_fit(text),
+        topic=_db_fit("event"),
     )
     db.add(event_chat)
     await db.commit()
@@ -968,4 +969,13 @@ def _chat_message_type(row: ChatMessage) -> str:
     if row.sender_type == "user":
         return "user"
     return "system"
+
+
+def _db_fit(text: str | None, max_len: int = CHAT_DB_MAX_LEN) -> str | None:
+    if text is None:
+        return None
+    value = text.strip()
+    if len(value) <= max_len:
+        return value
+    return value[: max_len - 1].rstrip() + "…"
     SimulationStatusOut,

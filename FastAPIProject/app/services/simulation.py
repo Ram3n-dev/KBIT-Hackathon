@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import random
 import re
 from dataclasses import dataclass
@@ -15,6 +16,7 @@ from app.services.memory import add_memory, retrieve_relevant_memories
 
 
 settings = get_settings()
+logger = logging.getLogger("app.sim")
 
 MOODS = [
     ("Радостный", "😄", "#4CAF50", 0.85),
@@ -33,10 +35,17 @@ NEUTRAL_TOPICS = [
 
 BAD_PATTERNS = [
     "после того что произошло",
-    "это важно:",
+    "это важно",
     "давай обсудим",
     "у меня мысль по поводу",
 ]
+
+SAFE_FALLBACKS = [
+    "Я за то, чтобы сейчас выбрать один конкретный следующий шаг и закрепить его.",
+    "Давай не распыляться: определим приоритет на ближайший час и двинемся по нему.",
+    "Предлагаю коротко синхронизироваться и договориться, кто что делает дальше.",
+]
+CHAT_DB_MAX_LEN = 120
 
 
 @dataclass
@@ -83,7 +92,8 @@ class SimulationEngine:
                 continue
             try:
                 await self._tick()
-            except Exception:
+            except Exception as exc:
+                logger.exception("tick error: %s", exc)
                 await asyncio.sleep(1.0)
 
             speed = await self._get_speed()
@@ -111,7 +121,7 @@ class SimulationEngine:
                 return
 
             rel = await _get_or_create_relation(session, actor.id, target.id)
-            if random.random() > max(0.08, rel.score * 0.50):
+            if random.random() > max(0.10, rel.score * 0.60):
                 return
 
             memories = await retrieve_relevant_memories(session, actor.id, f"{target.name} диалог", k=3)
@@ -130,6 +140,7 @@ class SimulationEngine:
             latest_event = await _latest_user_event(session, actor.created_at)
             force_event_reaction = bool(latest_event and not await _has_agent_reacted_to_event(session, actor.id, latest_event.id))
             topic = self._select_topic(actor, target, latest_event.text if latest_event else None, force_event_reaction)
+            topic_db = _db_fit(topic, CHAT_DB_MAX_LEN)
 
             recent_chat = await _recent_chat_context(session, actor.id, target.id)
             llm_chat = None
@@ -145,13 +156,9 @@ class SimulationEngine:
                 if llm_chat:
                     self._last_dialogue_llm_at[actor.id] = datetime.utcnow()
 
-            if not llm_chat:
-                return
-
-            chat_text = _clean_message(llm_chat)
+            chat_text = _clean_message(llm_chat or "")
             if not _is_quality_message(chat_text):
-                # one retry with explicit anti-template guard
-                retry_prompt = f"{topic}. Сформулируй мысль иначе: без шаблонов и повторов, только конкретика."
+                retry_prompt = f"{topic}. Сформулируй иначе: без шаблонов, без повторов, с конкретным шагом."
                 retry = await self._llm.generate_dialogue_message(
                     actor_name=actor.name,
                     actor_personality=actor.personality,
@@ -160,19 +167,20 @@ class SimulationEngine:
                     topic=retry_prompt,
                     recent_messages=recent_chat,
                 )
-                if not retry:
-                    return
-                chat_text = _clean_message(retry)
-                if not _is_quality_message(chat_text):
-                    return
+                chat_text = _clean_message(retry or "")
 
-            if await _is_duplicate_chat(session, actor.id, target.id, chat_text):
+            if not _is_quality_message(chat_text):
+                chat_text = random.choice(SAFE_FALLBACKS)
+            chat_text_db = _db_fit(chat_text, CHAT_DB_MAX_LEN)
+
+            if await _is_duplicate_chat(session, actor.id, target.id, chat_text_db):
+                logger.info("drop: duplicate sender=%s receiver=%s", actor.id, target.id)
                 return
-            if await _is_repetitive_chat(session, actor.id, chat_text):
+            if await _is_repetitive_chat(session, actor.id, chat_text_db):
+                logger.info("drop: repetitive sender=%s", actor.id)
                 return
 
             plan_text = (llm_step or {}).get("plan") or f"Согласовать с {target.name} следующий практический шаг по теме '{topic}'."
-            action = (llm_step or {}).get("action") or "уточнил(а) позицию и зафиксировал(а) следующий шаг"
             relation_delta = (llm_step or {}).get("relation_delta", random.uniform(-0.03, 0.06))
             try:
                 relation_delta = float(relation_delta)
@@ -195,14 +203,14 @@ class SimulationEngine:
                 sender_type="agent",
                 sender_agent_id=actor.id,
                 receiver_agent_id=target.id,
-                text=chat_text,
-                topic=topic,
+                text=chat_text_db,
+                topic=topic_db,
             )
             session.add(event)
             session.add(chat_msg)
 
-            await add_memory(session, actor.id, f"Я написал {target.name}: {chat_text}", source="chat")
-            await add_memory(session, target.id, f"{actor.name} написал мне: {chat_text}", source="chat")
+            await add_memory(session, actor.id, f"Я написал {target.name}: {chat_text_db}", source="chat")
+            await add_memory(session, target.id, f"{actor.name} написал мне: {chat_text_db}", source="chat")
             await add_memory(session, actor.id, event_text, source="agent_action")
             if force_event_reaction and latest_event:
                 await add_memory(
@@ -213,7 +221,6 @@ class SimulationEngine:
                 )
 
             await session.commit()
-
             self._mark_turn(actor.id, target.id)
 
             payload_event = {
@@ -231,8 +238,8 @@ class SimulationEngine:
                 "sender_name": actor.name,
                 "receiver_agent_id": target.id,
                 "receiver_name": target.name,
-                "text": chat_text,
-                "topic": topic,
+                "text": chat_text_db,
+                "topic": topic_db,
                 "timestamp": datetime.utcnow().isoformat() + "Z",
             }
             await self._event_bus.publish(payload_event)
@@ -241,8 +248,7 @@ class SimulationEngine:
             await self._ws_hub.broadcast(payload_chat)
 
     def _pick_actor_target(self, by_id: dict[int, Agent]) -> tuple[Agent, Agent] | None:
-        # Prefer pending response to get natural turn-taking.
-        pending_candidates = [aid for aid in self._pending_reply.keys() if aid in by_id and self._pending_reply[aid] in by_id]
+        pending_candidates = [aid for aid in self._pending_reply if aid in by_id and self._pending_reply[aid] in by_id]
         if pending_candidates and random.random() < 0.75:
             actor_id = random.choice(pending_candidates)
             target_id = self._pending_reply.pop(actor_id)
@@ -254,8 +260,7 @@ class SimulationEngine:
         others = [a for a in agents if a.id != actor.id]
         if not others:
             return None
-        target = random.choice(others)
-        return actor, target
+        return actor, random.choice(others)
 
     def _select_topic(self, actor: Agent, target: Agent, latest_event_text: str | None, force_event: bool) -> str:
         key = tuple(sorted((actor.id, target.id)))
@@ -271,8 +276,8 @@ class SimulationEngine:
             return state.topic
 
         if actor.current_plan and actor.current_plan.strip():
-            topic = f"{actor.current_plan.strip()}"
-        elif latest_event_text and random.random() < 0.35:
+            topic = actor.current_plan.strip()
+        elif latest_event_text and random.random() < 0.30:
             topic = latest_event_text
         else:
             topic = random.choice(NEUTRAL_TOPICS)
@@ -288,13 +293,13 @@ class SimulationEngine:
         last = self._last_sent_at.get(agent_id)
         if not last:
             return False
-        return (datetime.utcnow() - last).total_seconds() < 12
+        return (datetime.utcnow() - last).total_seconds() < 8
 
     def _can_use_llm(self, store: dict[int, datetime], agent_id: int) -> bool:
         last = store.get(agent_id)
         if not last:
             return True
-        return (datetime.utcnow() - last).total_seconds() >= settings.llm_agent_cooldown_seconds
+        return (datetime.utcnow() - last).total_seconds() >= max(8, settings.llm_agent_cooldown_seconds // 2)
 
 
 async def _get_or_create_relation(session, source_id: int, target_id: int) -> Relationship:
@@ -323,11 +328,7 @@ async def _recent_chat_context(session, agent_a_id: int, agent_b_id: int) -> lis
     )
     rows = list((await session.scalars(stmt)).all())
     rows.reverse()
-    result: list[str] = []
-    for row in rows:
-        who = f"agent:{row.sender_agent_id}" if row.sender_agent_id else row.sender_type
-        result.append(f"{who}: {row.text}")
-    return result
+    return [f"{'agent:'+str(r.sender_agent_id) if r.sender_agent_id else r.sender_type}: {r.text}" for r in rows]
 
 
 async def _is_duplicate_chat(session, sender_id: int, receiver_id: int, text: str) -> bool:
@@ -340,9 +341,7 @@ async def _is_duplicate_chat(session, sender_id: int, receiver_id: int, text: st
     last = await session.scalar(stmt)
     if not last:
         return False
-    new_text = _normalize_text(text)
-    old_text = _normalize_text(last.text or "")
-    return new_text == old_text
+    return _normalize_text(text) == _normalize_text(last.text or "")
 
 
 async def _is_repetitive_chat(session, sender_id: int, text: str) -> bool:
@@ -350,7 +349,7 @@ async def _is_repetitive_chat(session, sender_id: int, text: str) -> bool:
         select(ChatMessage)
         .where(ChatMessage.sender_agent_id == sender_id)
         .order_by(ChatMessage.created_at.desc())
-        .limit(6)
+        .limit(4)
     )
     rows = list((await session.scalars(stmt)).all())
     if not rows:
@@ -358,7 +357,7 @@ async def _is_repetitive_chat(session, sender_id: int, text: str) -> bool:
 
     new_text = _normalize_text(text)
     new_tokens = set(new_text.split())
-    if not new_tokens:
+    if len(new_tokens) < 4:
         return True
 
     for row in rows:
@@ -369,7 +368,7 @@ async def _is_repetitive_chat(session, sender_id: int, text: str) -> bool:
         if new_text == old_text:
             return True
         overlap = len(new_tokens & old_tokens) / max(1, len(new_tokens | old_tokens))
-        if overlap >= 0.78:
+        if overlap >= 0.90:
             return True
     return False
 
@@ -405,30 +404,27 @@ async def _has_agent_reacted_to_event(session, agent_id: int, event_id: int) -> 
 
 
 def _clean_message(text: str) -> str:
-    cleaned = " ".join(text.strip().split())
-    cleaned = cleaned.replace("\n", " ").replace("\r", " ")
-    return cleaned
+    return " ".join((text or "").strip().split()).replace("\n", " ").replace("\r", " ")
 
 
 def _is_quality_message(text: str) -> bool:
     norm = _normalize_text(text)
     if not norm:
         return False
-    if len(norm) < 18 or len(norm) > 260:
+    if len(norm) < 12 or len(norm) > 320:
         return False
 
     for p in BAD_PATTERNS:
         if p in norm:
             return False
 
-    # avoid over-repetition of same token
     tokens = norm.split()
     unique_ratio = len(set(tokens)) / max(1, len(tokens))
-    if unique_ratio < 0.45:
+    if unique_ratio < 0.35:
         return False
 
-    # at most 2-3 short sentences
-    if text.count(".") + text.count("!") + text.count("?") > 3:
+    sentence_marks = text.count(".") + text.count("!") + text.count("?")
+    if sentence_marks > 4:
         return False
     return True
 
@@ -437,6 +433,15 @@ def _normalize_text(text: str) -> str:
     t = text.lower().replace("ё", "е")
     t = re.sub(r"[^a-zа-я0-9\s]", " ", t)
     return " ".join(t.split())
+
+
+def _db_fit(text: str | None, max_len: int) -> str | None:
+    if text is None:
+        return None
+    value = text.strip()
+    if len(value) <= max_len:
+        return value
+    return value[: max_len - 1].rstrip() + "…"
 
 
 def _mood_from_relation(score: float) -> tuple[str, str, str, float]:

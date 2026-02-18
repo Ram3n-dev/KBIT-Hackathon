@@ -176,7 +176,7 @@ class LLMService:
     ) -> dict[str, Any] | None:
         if not self.is_enabled():
             return None
-        if random.random() > self._config.step_llm_probability:
+        if random.random() > max(0.80, self._config.step_llm_probability):
             return None
 
         clipped_memories = [_clip_text(m, self._config.max_memory_chars) for m in memories[: self._config.max_memories_in_prompt]]
@@ -218,7 +218,7 @@ class LLMService:
     ) -> str | None:
         if not self.is_enabled():
             return None
-        if random.random() > self._config.dialogue_llm_probability:
+        if random.random() > max(0.90, self._config.dialogue_llm_probability):
             return None
 
         clipped_history = [
