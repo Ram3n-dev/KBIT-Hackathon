@@ -128,3 +128,9 @@ LLM_DEBUG_LOG_MAX_CHARS=2500
 - `PUT /relations/{id}`
 - `DELETE /relations/{id}`
 - `PUT /time-speed`
+
+## Added avatar API
+- `GET /avatars` (requires `Authorization: Bearer <token>`)
+- `GET /avatars/files/{file_name}` (serves avatar SVG by file name)
+- Agent create/update now support `avatarFile` (legacy `avatar` is still accepted as input).
+- Agent responses now return `avatarFile` for frontend compatibility.

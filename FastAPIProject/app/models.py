@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from datetime import datetime
 
@@ -18,19 +18,19 @@ class Agent(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False, unique=True)
-    avatar: Mapped[str] = mapped_column(String(32), default="🤖")
+    avatar: Mapped[str] = mapped_column(String(64), default="yellow_slime.svg")
     avatar_color: Mapped[str] = mapped_column(String(24), default="#4CAF50")
-    avatar_name: Mapped[str] = mapped_column(String(120), default="Робот")
+    avatar_name: Mapped[str] = mapped_column(String(120), default="Р РѕР±РѕС‚")
     personality: Mapped[str] = mapped_column(
         Text,
-        default="Любознательный и дружелюбный агент. Любит исследовать мир и помогать другим.",
+        default="Р›СЋР±РѕР·РЅР°С‚РµР»СЊРЅС‹Р№ Рё РґСЂСѓР¶РµР»СЋР±РЅС‹Р№ Р°РіРµРЅС‚. Р›СЋР±РёС‚ РёСЃСЃР»РµРґРѕРІР°С‚СЊ РјРёСЂ Рё РїРѕРјРѕРіР°С‚СЊ РґСЂСѓРіРёРј.",
     )
     mood_score: Mapped[float] = mapped_column(Float, default=0.5)
-    mood_text: Mapped[str] = mapped_column(String(40), default="Спокоен")
-    mood_emoji: Mapped[str] = mapped_column(String(8), default="😐")
+    mood_text: Mapped[str] = mapped_column(String(40), default="РЎРїРѕРєРѕРµРЅ")
+    mood_emoji: Mapped[str] = mapped_column(String(8), default="рџђ")
     mood_color: Mapped[str] = mapped_column(String(16), default="#FFC107")
-    current_plan: Mapped[str] = mapped_column(Text, default="Наблюдать за окружением")
-    reflection: Mapped[str] = mapped_column(Text, default="Я только начал свою жизнь в этом мире.")
+    current_plan: Mapped[str] = mapped_column(Text, default="РќР°Р±Р»СЋРґР°С‚СЊ Р·Р° РѕРєСЂСѓР¶РµРЅРёРµРј")
+    reflection: Mapped[str] = mapped_column(Text, default="РЇ С‚РѕР»СЊРєРѕ РЅР°С‡Р°Р» СЃРІРѕСЋ Р¶РёР·РЅСЊ РІ СЌС‚РѕРј РјРёСЂРµ.")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -113,7 +113,7 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(120), unique=True, nullable=False, index=True)
     email: Mapped[str] = mapped_column(String(200), unique=True, nullable=False, index=True)
     password_hash: Mapped[str] = mapped_column(String(200), nullable=False)
-    avatar: Mapped[str] = mapped_column(String(32), default="👤")
+    avatar: Mapped[str] = mapped_column(String(64), default="yellow_slime.svg")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -131,3 +131,5 @@ class ChatMessage(Base):
     text: Mapped[str] = mapped_column(Text, nullable=False)
     topic: Mapped[str | None] = mapped_column(String(120), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+

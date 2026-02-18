@@ -11,8 +11,7 @@ import jwt
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,6 +49,13 @@ from app.schemas import (
     UserOut,
 )
 from app.services.llm import get_llm_service
+from app.services.avatars import (
+    DEFAULT_AVATAR_FILE,
+    avatar_assets_dir,
+    get_avatar_catalog,
+    get_avatar_meta,
+    is_valid_avatar_file,
+)
 from app.services.memory import add_memory, retrieve_relevant_memories
 from app.services.simulation import SimulationEngine
 
@@ -119,7 +125,12 @@ async def auth_register(payload: AuthRegisterIn, db: AsyncSession = Depends(get_
     if exists:
         raise HTTPException(status_code=400, detail="Пользователь уже существует")
 
-    user = User(username=username, email=email, password_hash=_hash_password(payload.password))
+    user = User(
+        username=username,
+        email=email,
+        password_hash=_hash_password(payload.password),
+        avatar=DEFAULT_AVATAR_FILE,
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -143,6 +154,37 @@ async def auth_profile(
 ) -> UserOut:
     user = await _get_current_user(credentials, db)
     return UserOut.model_validate(user)
+
+
+@app.get("/avatars")
+async def get_avatars(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict]:
+    user = await _get_current_user(credentials, db)
+    selected = user.avatar if is_valid_avatar_file(user.avatar) else DEFAULT_AVATAR_FILE
+    base_url = str(request.base_url).rstrip("/")
+    rows: list[dict] = []
+    for item in get_avatar_catalog():
+        rows.append(
+            {
+                **item,
+                "image": f"{base_url}/avatars/files/{item['file']}",
+                "isSelected": item["file"] == selected,
+            }
+        )
+    return rows
+
+
+@app.get("/avatars/files/{file_name}")
+async def get_avatar_file(file_name: str) -> FileResponse:
+    if not is_valid_avatar_file(file_name):
+        raise HTTPException(status_code=404, detail="Avatar file not found")
+    path = avatar_assets_dir() / file_name
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Avatar file not found")
+    return FileResponse(path)
 
 
 @app.post("/auth/logout")
@@ -184,11 +226,13 @@ async def create_agent(payload: AgentCreate, db: AsyncSession = Depends(get_db))
     if exists:
         raise HTTPException(status_code=400, detail="Агент с таким именем уже существует")
 
+    avatar_file = payload.avatarFile if is_valid_avatar_file(payload.avatarFile) else DEFAULT_AVATAR_FILE
+    avatar_meta = get_avatar_meta(avatar_file) or {}
     agent = Agent(
         name=payload.name.strip(),
-        avatar=payload.avatar,
-        avatar_color=payload.avatarColor,
-        avatar_name=payload.avatarName,
+        avatar=avatar_file,
+        avatar_color=payload.avatarColor or avatar_meta.get("color", "#4CAF50"),
+        avatar_name=payload.avatarName or avatar_meta.get("name", "Agent"),
         personality=payload.personality or "Новый агент с уникальным взглядом на мир.",
     )
     db.add(agent)
@@ -218,8 +262,13 @@ async def update_agent(agent_id: int, payload: AgentUpdate, db: AsyncSession = D
     data = payload.model_dump(exclude_unset=True)
     if "name" in data and data["name"]:
         agent.name = data["name"].strip()
-    if "avatar" in data and data["avatar"] is not None:
-        agent.avatar = data["avatar"]
+    if "avatarFile" in data and data["avatarFile"] is not None and is_valid_avatar_file(data["avatarFile"]):
+        agent.avatar = data["avatarFile"]
+        meta = get_avatar_meta(agent.avatar) or {}
+        if "avatarColor" not in data:
+            agent.avatar_color = meta.get("color", agent.avatar_color)
+        if "avatarName" not in data:
+            agent.avatar_name = meta.get("name", agent.avatar_name)
     if "avatarColor" in data and data["avatarColor"] is not None:
         agent.avatar_color = data["avatarColor"]
     if "avatarName" in data and data["avatarName"] is not None:
@@ -637,23 +686,23 @@ async def seed_initial_data() -> None:
         seed_agents = [
             Agent(
                 name="Астра",
-                avatar="🦊",
-                avatar_color="#aab97e",
-                avatar_name="Лиса",
+                avatar="yellow_slime.svg",
+                avatar_color="#FFD700",
+                avatar_name="Yellow Slime",
                 personality="Энергичная стратегиня, быстро строит планы и любит командные активности.",
             ),
             Agent(
                 name="Бруно",
-                avatar="🐶",
-                avatar_color="#5d6939",
-                avatar_name="Пес",
+                avatar="blue_slime.svg",
+                avatar_color="#4169E1",
+                avatar_name="Blue Slime",
                 personality="Верный и эмпатичный, защищает друзей и стремится к стабильности.",
             ),
             Agent(
                 name="Нова",
-                avatar="🦉",
-                avatar_color="#8b8b7a",
-                avatar_name="Сова",
+                avatar="purple_slime.svg",
+                avatar_color="#800080",
+                avatar_name="Purple Slime",
                 personality="Наблюдательная, склонна к рефлексии и аналитическим выводам.",
             ),
         ]

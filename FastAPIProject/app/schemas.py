@@ -1,13 +1,15 @@
-from datetime import datetime
+﻿from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
 class AgentCreate(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     name: str = Field(min_length=1, max_length=120)
-    avatar: str = "🤖"
+    avatarFile: str | None = Field(default=None, validation_alias=AliasChoices("avatarFile", "avatar"))
     avatarColor: str = "#4CAF50"
-    avatarName: str = "Робот"
+    avatarName: str = "Agent"
     personality: str | None = None
 
 
@@ -16,14 +18,17 @@ class AgentOut(BaseModel):
 
     id: int
     name: str
-    avatar: str
+    avatarFile: str = Field(validation_alias="avatar")
     avatarColor: str = Field(alias="avatar_color")
     avatarName: str = Field(alias="avatar_name")
+    personality: str
 
 
 class AgentUpdate(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     name: str | None = Field(default=None, min_length=1, max_length=120)
-    avatar: str | None = None
+    avatarFile: str | None = Field(default=None, validation_alias=AliasChoices("avatarFile", "avatar"))
     avatarColor: str | None = None
     avatarName: str | None = None
     personality: str | None = None
