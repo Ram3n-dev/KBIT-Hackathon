@@ -185,9 +185,18 @@ function ChatBots({ isAuthenticated, onLoginClick }) {
   };
 
   const getMessageType = (message) => {
-    if (message.type === 'system') return 'system';
-    if (message.type === 'event') return 'event';
-    return 'agent';
+    // Если есть явно указанный тип, используем его
+    if (message.type) {
+      if (message.type === 'system') return 'system';
+      if (message.type === 'event') return 'event';
+      if (message.type === 'agent') return 'agent';
+    }
+    
+    // Если нет типа, но есть agentId - это сообщение агента
+    if (message.agentId) return 'agent';
+    
+    // Иначе это системное сообщение
+    return 'system';
   };
 
   // Заглушка для неавторизованных пользователей
@@ -246,6 +255,7 @@ function ChatBots({ isAuthenticated, onLoginClick }) {
               const showAvatar = messageType === 'agent' && (index === 0 || 
                 messages[index - 1]?.agentId !== message.agentId);
               
+              // Системные сообщения и события (голос свыше)
               if (messageType === 'system' || messageType === 'event') {
                 return (
                   <div key={message.id} className="system-message-wrapper">
@@ -260,6 +270,7 @@ function ChatBots({ isAuthenticated, onLoginClick }) {
                 );
               }
               
+              // Сообщения от агентов
               return (
                 <div 
                   key={message.id} 

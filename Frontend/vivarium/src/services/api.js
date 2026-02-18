@@ -242,7 +242,10 @@ class ApiService {
     return this.fetchWithError(`${API_URL}/events`, {
       method: "POST",
       headers: this.getHeaders(),
-      body: JSON.stringify(eventData),
+      body: JSON.stringify({
+        text: eventData.text,
+        type: 'event' // Явно указываем тип 'event'
+      }),
     });
   }
 
@@ -265,9 +268,15 @@ class ApiService {
   // ============= ЧАТ (ОБЩИЙ) =============
 
   async getChatMessages(limit = 50) {
-    return this.fetchWithError(`${API_URL}/chat/messages?limit=${limit}`, {
+    const data = await this.fetchWithError(`${API_URL}/chat/messages?limit=${limit}`, {
       headers: this.getHeaders(),
     });
+    
+    // Добавляем поле type, если его нет
+    return data.map(msg => ({
+      ...msg,
+      type: msg.type || (msg.agentId ? 'agent' : 'system')
+    }));
   }
 
   async sendChatMessage(messageData) {
@@ -290,9 +299,15 @@ class ApiService {
       ? `${API_URL}/chat/messages?after=${lastMessageId}`
       : `${API_URL}/chat/messages`;
 
-    return this.fetchWithError(url, {
+    const data = await this.fetchWithError(url, {
       headers: this.getHeaders(),
     });
+    
+    // Добавляем поле type, если его нет
+    return data.map(msg => ({
+      ...msg,
+      type: msg.type || (msg.agentId ? 'agent' : 'system')
+    }));
   }
 
   // ============= СКОРОСТЬ ВРЕМЕНИ =============

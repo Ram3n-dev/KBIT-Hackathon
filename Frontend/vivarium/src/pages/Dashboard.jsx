@@ -42,7 +42,11 @@ function Dashboard({ isAuthenticated, onLoginClick }) {
     
     setLoading(true);
     try {
-      await api.createEvent({ text: eventText });
+      // Отправляем событие с типом 'event'
+      await api.createEvent({ 
+        text: eventText,
+        type: 'event'
+      });
       setEventText("");
       console.log("Событие добавлено");
     } catch (error) {
