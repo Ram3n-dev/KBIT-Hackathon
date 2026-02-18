@@ -56,19 +56,19 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  scrollbar-width: none; /* Для Firefox */
-  -ms-overflow-style: none; /* Для IE и Edge */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 2px; /* Уменьшаем gap между сообщениями */
   padding-right: 10px;
 }
 
-/* Для Chrome, Safari и Opera */
 .chat-messages::-webkit-scrollbar {
   display: none;
 }
 
+/* Обертка для сообщения */
 .message-wrapper {
   display: flex;
   align-items: flex-start;
@@ -77,12 +77,16 @@
   flex-shrink: 0;
 }
 
+/* Для первого сообщения с аватаром */
 .message-wrapper.with-avatar {
-  margin-top: 5px;
+  margin-top: 10px;
 }
 
+/* Для последующих сообщений без аватара */
 .message-wrapper.without-avatar {
   margin-top: 2px;
+  /* Добавляем отступ слева, равный ширине аватара + gap */
+  padding-left: 62px; /* 50px (ширина аватара) + 12px (gap) */
 }
 
 .message-avatar {
@@ -95,7 +99,7 @@
   font-size: 24px;
   color: #a29d8a;
   flex-shrink: 0;
-  align-self: center;
+  align-self: flex-start; /* Аватар прижат к верху */
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
@@ -148,7 +152,7 @@
   display: flex;
   justify-content: center;
   width: 100%;
-  margin: 5px 0;
+  margin: 10px 0;
 }
 
 .system-message {
@@ -174,7 +178,7 @@
 }
 
 .system-message p {
-  color: #f1e8c7;
+  color: #000000;
   font-size: 14px;
   margin: 0;
   font-style: italic;
@@ -228,8 +232,7 @@
 }
 
 @keyframes bounce {
-  0%,
-  100% {
+  0%, 100% {
     transform: translateX(-50%) translateY(0);
   }
   50% {
@@ -335,6 +338,13 @@
   }
 }
 
+.avatar-image {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
 /* Адаптивность */
 @media (max-width: 768px) {
   .message-block {
@@ -374,10 +384,9 @@
   .system-message p {
     font-size: 12px;
   }
-}
-.avatar-image {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  object-fit: cover;
+  
+  /* Для мобильных устройств */
+  .message-wrapper.without-avatar {
+    padding-left: 52px; /* 40px + 12px */
+  }
 }

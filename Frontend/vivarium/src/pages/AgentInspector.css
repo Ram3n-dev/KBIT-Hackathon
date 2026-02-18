@@ -1,9 +1,49 @@
 /* Инспектор агента */
-.inspector-page .inspector-container {
+.inspector-page {
+  height: 100%;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 30px;
+  min-height: 0;
+  flex: 1;
+}
+
+.inspector-page h1 {
+  flex-shrink: 0;
+  margin-bottom: 20px;
+}
+
+.inspector-page .inspector-container {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+  padding-right: 10px;
+  
+  /* Стилизация скроллбара */
+  scrollbar-width: thin;
+  scrollbar-color: #aab97e rgba(255, 255, 255, 0.1);
+}
+
+/* Для Chrome, Safari и Opera */
+.inspector-page .inspector-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.inspector-page .inspector-container::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+.inspector-page .inspector-container::-webkit-scrollbar-thumb {
+  background: #aab97e;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.inspector-page .inspector-container::-webkit-scrollbar-thumb:hover {
+  background: #5d6939;
 }
 
 .inspector-select-section {
@@ -14,6 +54,7 @@
   max-width: 556px;
   margin-left: auto;
   margin-right: auto;
+  flex-shrink: 0;
 }
 
 .inspector-select-section h2 {
@@ -61,6 +102,28 @@
   margin-top: 5px;
   z-index: 100;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  
+  /* Стилизация скроллбара для выпадающего списка */
+  scrollbar-width: thin;
+  scrollbar-color: #aab97e rgba(255, 255, 255, 0.1);
+}
+
+.select-items::-webkit-scrollbar {
+  width: 8px;
+}
+
+.select-items::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+.select-items::-webkit-scrollbar-thumb {
+  background: #aab97e;
+  border-radius: 4px;
+}
+
+.select-items::-webkit-scrollbar-thumb:hover {
+  background: #5d6939;
 }
 
 .select-item {
@@ -80,25 +143,6 @@
   color: #f1e8c7;
 }
 
-/* Стилизация скроллбара для выпадающего списка */
-.select-items::-webkit-scrollbar {
-  width: 8px;
-}
-
-.select-items::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 4px;
-}
-
-.select-items::-webkit-scrollbar-thumb {
-  background: #aab97e;
-  border-radius: 4px;
-}
-
-.select-items::-webkit-scrollbar-thumb:hover {
-  background: #5d6939;
-}
-
 /* Панель информации об агенте */
 .agent-info-panel {
   background: #5d6939;
@@ -106,9 +150,12 @@
   padding: 30px;
   width: 100%;
   max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
   display: flex;
   flex-direction: column;
   gap: 25px;
+  flex-shrink: 0;
 }
 
 /* Имя агента */
@@ -266,134 +313,6 @@
   font-style: italic;
 }
 
-/* Адаптивность */
-@media (max-width: 768px) {
-  .agent-info-panel {
-    padding: 20px;
-  }
-
-  .relationship-item {
-    flex-direction: column;
-    gap: 10px;
-    text-align: center;
-  }
-
-  .thought-bubble::before {
-    left: 20px;
-  }
-}
-/* Режим редактирования */
-.view-mode {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 15px;
-  position: relative;
-}
-
-.edit-agent-btn {
-  background: #aab97e;
-  border: none;
-  border-radius: 50%;
-  width: 36px;
-  height: 36px;
-  font-size: 18px;
-  color: #454135;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-  margin-left: 10px;
-}
-
-.edit-agent-btn:hover {
-  background: #f1e8c7;
-  transform: scale(1.1);
-}
-
-.edit-mode {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 15px;
-  width: 100%;
-}
-
-.edit-name-input {
-  width: 100%;
-  max-width: 300px;
-  padding: 12px 15px;
-  border: none;
-  border-radius: 15px;
-  background: #f1e8c7;
-  font-size: 18px;
-  color: #454135;
-  text-align: center;
-}
-
-.edit-name-input:focus {
-  outline: 2px solid #aab97e;
-}
-
-.edit-avatar-selector {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: #f1e8c7;
-  font-size: 16px;
-}
-
-.edit-avatar-input {
-  width: 60px;
-  padding: 8px;
-  border: none;
-  border-radius: 10px;
-  background: #f1e8c7;
-  font-size: 20px;
-  color: #454135;
-  text-align: center;
-}
-
-.edit-avatar-input:focus {
-  outline: 2px solid #aab97e;
-}
-
-.edit-actions {
-  display: flex;
-  gap: 15px;
-  margin-top: 10px;
-}
-
-.save-btn,
-.edit-actions .cancel-btn {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 15px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.save-btn {
-  background: #aab97e;
-  color: #454135;
-}
-
-.save-btn:hover {
-  background: #f1e8c7;
-  transform: scale(1.02);
-}
-
-.edit-actions .cancel-btn {
-  background: rgba(241, 232, 199, 0.2);
-  color: #f1e8c7;
-}
-
-.edit-actions .cancel-btn:hover {
-  background: rgba(241, 232, 199, 0.3);
-}
 /* Аватарка в заголовке */
 .agent-header-avatar {
   width: 60px;
@@ -543,4 +462,29 @@
 
 .edit-actions .cancel-btn:hover {
   background: rgba(241, 232, 199, 0.3);
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+  .agent-info-panel {
+    padding: 20px;
+  }
+
+  .relationship-item {
+    flex-direction: column;
+    gap: 10px;
+    text-align: center;
+  }
+
+  .thought-bubble::before {
+    left: 20px;
+  }
+  
+  .inspector-page .inspector-container {
+    padding-right: 5px;
+  }
+  
+  .inspector-page .inspector-container::-webkit-scrollbar {
+    width: 5px;
+  }
 }

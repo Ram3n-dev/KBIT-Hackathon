@@ -238,7 +238,7 @@ function GraphRelations({ isAuthenticated, onLoginClick }) {
         </div>
 
         <div className="graph-legend">
-          <h3>Легенда</h3>
+          
           
           <div className="legend-items">
             <div className="legend-item">

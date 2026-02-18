@@ -39,13 +39,13 @@ function Dashboard({ isAuthenticated, onLoginClick }) {
 
   const handleAddEvent = async () => {
     if (!eventText.trim()) return;
-    
+
     setLoading(true);
     try {
       // Отправляем событие с типом 'event'
-      await api.createEvent({ 
+      await api.createEvent({
         text: eventText,
-        type: 'event'
+        type: "event",
       });
       setEventText("");
       console.log("Событие добавлено");
@@ -58,12 +58,12 @@ function Dashboard({ isAuthenticated, onLoginClick }) {
 
   const handleSendMessage = async () => {
     if (!selectedAgent || !messageText.trim()) return;
-    
+
     setLoading(true);
     try {
       await api.sendMessage({
         agentId: selectedAgent,
-        text: messageText
+        text: messageText,
       });
       setMessageText("");
       console.log("Сообщение отправлено");
@@ -92,10 +92,7 @@ function Dashboard({ isAuthenticated, onLoginClick }) {
           <div className="auth-required-icon">⚙️</div>
           <h2>Доступ ограничен</h2>
           <p>Пожалуйста, авторизуйтесь, чтобы управлять событиями и агентами</p>
-          <button 
-            className="auth-required-btn" 
-            onClick={onLoginClick}
-          >
+          <button className="auth-required-btn" onClick={onLoginClick}>
             Перейти к авторизации
           </button>
         </div>
@@ -153,7 +150,12 @@ function Dashboard({ isAuthenticated, onLoginClick }) {
               value={messageText}
               onChange={(e) => setMessageText(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && selectedAgent && messageText.trim() && !loading) {
+                if (
+                  e.key === "Enter" &&
+                  selectedAgent &&
+                  messageText.trim() &&
+                  !loading
+                ) {
                   handleSendMessage();
                 }
               }}
@@ -182,15 +184,6 @@ function Dashboard({ isAuthenticated, onLoginClick }) {
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Карточки панели управления */}
-      <div className="dashboard-cards">
-        <div className="dashboard-card">
-          <h3>Всего агентов</h3>
-          <div className="card-value">{agents.length}</div>
-        </div>
-        {/* Другие карточки */}
       </div>
     </div>
   );
