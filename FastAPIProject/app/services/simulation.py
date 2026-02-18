@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from app.config import get_settings
 from app.database import SessionLocal
-from app.models import Agent, ChatMessage, Event, Memory, Relationship, SimulationState
+from app.models import Agent, ChatMessage, Event, Memory, Message, Relationship, SimulationState
 from app.realtime import EventBus, WsHub
 from app.services.llm import get_llm_service
 from app.services.memory import add_memory, retrieve_relevant_memories
@@ -47,6 +47,7 @@ SAFE_FALLBACKS = [
     "Предлагаю коротко синхронизироваться и договориться, кто что делает дальше.",
 ]
 CHAT_DB_MAX_LEN = 120
+EVENT_STRICT_FOCUS_SECONDS = 180
 
 
 @dataclass
@@ -67,6 +68,7 @@ class SimulationEngine:
         self._last_sent_at: dict[int, datetime] = {}
         self._pending_reply: dict[int, int] = {}
         self._pair_topics: dict[tuple[int, int], ConversationState] = {}
+        self._active_event_id: int | None = None
         self._running = True
 
     async def start(self) -> None:
@@ -109,11 +111,24 @@ class SimulationEngine:
     async def _tick(self) -> None:
         async with SessionLocal() as session:
             agents = list((await session.scalars(select(Agent).order_by(Agent.id.asc()))).all())
-            if len(agents) < 2:
+            if not agents:
                 return
             by_id = {a.id: a for a in agents}
 
-            pair = self._pick_actor_target(by_id)
+            latest_event = await _latest_user_event(session)
+            active_event = await self._resolve_active_event(session, agents, latest_event)
+
+            pending_user_messages = await _collect_pending_user_messages(session, by_id)
+            for actor, user_msg in pending_user_messages:
+                if self._is_agent_on_cooldown(actor.id):
+                    continue
+                await self._handle_pending_user_message(session, actor, user_msg, active_event)
+                return
+
+            if len(agents) < 2:
+                return
+
+            pair = await self._pick_actor_target_for_tick(session, by_id, active_event)
             if not pair:
                 return
             actor, target = pair
@@ -122,12 +137,12 @@ class SimulationEngine:
                 return
 
             rel = await _get_or_create_relation(session, actor.id, target.id)
-            if random.random() > max(0.10, rel.score * 0.60):
+            if not active_event and random.random() > max(0.10, rel.score * 0.60):
                 return
 
             memories = await retrieve_relevant_memories(session, actor.id, f"{target.name} диалог", k=3)
             llm_step = None
-            if self._can_use_llm(self._last_step_llm_at, actor.id):
+            if not active_event and self._can_use_llm(self._last_step_llm_at, actor.id):
                 llm_step = await self._llm.generate_agent_step(
                     actor_name=actor.name,
                     actor_personality=actor.personality,
@@ -138,42 +153,44 @@ class SimulationEngine:
                 if llm_step:
                     self._last_step_llm_at[actor.id] = datetime.utcnow()
 
-            latest_event = await _latest_user_event(session, actor.created_at)
-            force_event_reaction = bool(latest_event and not await _has_agent_reacted_to_event(session, actor.id, latest_event.id))
-            topic = self._select_topic(actor, target, latest_event.text if latest_event else None, force_event_reaction)
+            force_event_reaction = bool(active_event and not await _has_agent_reacted_to_event(session, actor.id, active_event.id))
+            topic = active_event.text if active_event else self._select_topic(actor, target, None, False)
             topic_db = _db_fit(topic, CHAT_DB_MAX_LEN)
 
-            recent_chat = await _recent_chat_context(session, actor.id, target.id)
-            llm_chat = None
-            if self._can_use_llm(self._last_dialogue_llm_at, actor.id):
-                llm_chat = await self._llm.generate_dialogue_message(
-                    actor_name=actor.name,
-                    actor_personality=actor.personality,
-                    actor_mood=actor.mood_text,
-                    target_name=target.name,
-                    topic=topic,
-                    recent_messages=recent_chat,
-                )
-                if llm_chat:
-                    self._last_dialogue_llm_at[actor.id] = datetime.utcnow()
+            if active_event:
+                chat_text = _build_event_focused_chat(target.name, active_event.text)
+            else:
+                recent_chat = await _recent_chat_context(session, actor.id, target.id)
+                llm_chat = None
+                if self._can_use_llm(self._last_dialogue_llm_at, actor.id):
+                    llm_chat = await self._llm.generate_dialogue_message(
+                        actor_name=actor.name,
+                        actor_personality=actor.personality,
+                        actor_mood=actor.mood_text,
+                        target_name=target.name,
+                        topic=topic,
+                        recent_messages=recent_chat,
+                    )
+                    if llm_chat:
+                        self._last_dialogue_llm_at[actor.id] = datetime.utcnow()
 
-            chat_text = _clean_message(llm_chat or "")
-            if not _is_quality_message(chat_text):
-                retry_prompt = f"{topic}. Сформулируй иначе: без шаблонов, без повторов, с конкретным шагом."
-                retry = await self._llm.generate_dialogue_message(
-                    actor_name=actor.name,
-                    actor_personality=actor.personality,
-                    actor_mood=actor.mood_text,
-                    target_name=target.name,
-                    topic=retry_prompt,
-                    recent_messages=recent_chat,
-                )
-                chat_text = _clean_message(retry or "")
+                chat_text = _clean_message(llm_chat or "")
+                if not _is_quality_message(chat_text):
+                    retry_prompt = f"{topic}. Сформулируй иначе: без шаблонов, без повторов, с конкретным шагом."
+                    retry = await self._llm.generate_dialogue_message(
+                        actor_name=actor.name,
+                        actor_personality=actor.personality,
+                        actor_mood=actor.mood_text,
+                        target_name=target.name,
+                        topic=retry_prompt,
+                        recent_messages=recent_chat,
+                    )
+                    chat_text = _clean_message(retry or "")
 
-            if not _is_quality_message(chat_text):
-                chat_text = random.choice(SAFE_FALLBACKS)
+                if not _is_quality_message(chat_text):
+                    chat_text = random.choice(SAFE_FALLBACKS)
+
             chat_text_db = _db_fit(chat_text, CHAT_DB_MAX_LEN)
-
             if await _is_duplicate_chat(session, actor.id, target.id, chat_text_db):
                 logger.info("drop: duplicate sender=%s receiver=%s", actor.id, target.id)
                 return
@@ -189,7 +206,6 @@ class SimulationEngine:
             except Exception:
                 relation_delta = random.uniform(-0.03, 0.06)
 
-            event_text = f"{actor.name} скорректировал(а) план после диалога с {target.name}."
             actor.reflection = (llm_step or {}).get("reflection") or (
                 f"Я веду разговор с {target.name} по теме '{topic}' и держу фокус на конкретных шагах."
             )
@@ -200,6 +216,11 @@ class SimulationEngine:
             mood = _mood_from_relation(rel.score)
             actor.mood_text, actor.mood_emoji, actor.mood_color, actor.mood_score = mood
 
+            event_text = (
+                f"{actor.name} и {target.name} синхронизировались по событию: {active_event.text}"
+                if active_event
+                else f"{actor.name} скорректировал(а) план после диалога с {target.name}."
+            )
             event = Event(text=event_text, event_type="agent_action")
             chat_msg = ChatMessage(
                 sender_type="agent",
@@ -214,12 +235,12 @@ class SimulationEngine:
             await add_memory(session, actor.id, f"Я написал {target.name}: {chat_text_db}", source="chat")
             await add_memory(session, target.id, f"{actor.name} написал мне: {chat_text_db}", source="chat")
             await add_memory(session, actor.id, event_text, source="agent_action")
-            if force_event_reaction and latest_event:
+            if force_event_reaction and active_event:
                 await add_memory(
                     session,
                     actor.id,
-                    f"Я отреагировал на событие: {latest_event.text}",
-                    source=f"evt_rx_{latest_event.id}",
+                    f"Я отреагировал на событие: {active_event.text}",
+                    source=f"evt_rx_{active_event.id}",
                 )
 
             await session.commit()
@@ -248,6 +269,143 @@ class SimulationEngine:
             await self._event_bus.publish(payload_chat)
             await self._ws_hub.broadcast(payload_event)
             await self._ws_hub.broadcast(payload_chat)
+
+    async def _resolve_active_event(
+        self,
+        session,
+        agents: list[Agent],
+        latest_event: Event | None,
+    ) -> Event | None:
+        if not latest_event:
+            self._active_event_id = None
+            return None
+
+        if latest_event.id != self._active_event_id:
+            self._active_event_id = latest_event.id
+            self._pending_reply.clear()
+            self._pair_topics.clear()
+
+        if _event_age_seconds(latest_event) <= EVENT_STRICT_FOCUS_SECONDS:
+            return latest_event
+
+        for agent in agents:
+            if not await _has_agent_reacted_to_event(session, agent.id, latest_event.id):
+                return latest_event
+        return None
+
+    async def _pick_actor_target_for_tick(
+        self,
+        session,
+        by_id: dict[int, Agent],
+        active_event: Event | None,
+    ) -> tuple[Agent, Agent] | None:
+        if not active_event:
+            return self._pick_actor_target(by_id)
+
+        unreacted: list[int] = []
+        for aid in by_id:
+            if not await _has_agent_reacted_to_event(session, aid, active_event.id):
+                unreacted.append(aid)
+        candidates = unreacted or list(by_id.keys())
+        if not candidates:
+            return None
+        actor_id = random.choice(candidates)
+        others = [aid for aid in by_id if aid != actor_id]
+        if not others:
+            return None
+        target_id = random.choice(others)
+        return by_id[actor_id], by_id[target_id]
+
+    async def _handle_pending_user_message(
+        self,
+        session,
+        actor: Agent,
+        user_msg: Message,
+        active_event: Event | None,
+    ) -> None:
+        topic = active_event.text if active_event else f"Пользователь написал: {user_msg.text}"
+        reply = _build_event_only_reply(active_event.text) if active_event else await self._build_direct_reply(session, actor, topic)
+        reply_db = _db_fit(reply, CHAT_DB_MAX_LEN) or "Принял."
+
+        session.add(Message(sender="agent", agent_id=actor.id, text=reply_db))
+        chat_topic = "event" if active_event else "direct"
+        chat_row = ChatMessage(
+            sender_type="agent",
+            sender_agent_id=actor.id,
+            receiver_agent_id=None,
+            text=reply_db,
+            topic=chat_topic,
+        )
+        session.add(chat_row)
+
+        default_plan = (
+            f"Уточнить у пользователя детали по событию: {active_event.text}"
+            if active_event
+            else "Уточнить у пользователя следующий конкретный шаг."
+        )
+        actor.current_plan = compact_plan_text("", fallback=default_plan)
+        await set_current_plan(session, actor.id, actor.current_plan)
+        actor.reflection = (
+            f"Отвечаю пользователю по событию: {active_event.text}"
+            if active_event
+            else f"Пользователь написал: {user_msg.text}. Нужен конкретный ответ."
+        )
+
+        await add_memory(session, actor.id, f"Пользователь написал лично: {user_msg.text}", source="user_message")
+        await add_memory(session, actor.id, f"Я ответил пользователю: {reply_db}", source="agent_reply")
+        if active_event and not await _has_agent_reacted_to_event(session, actor.id, active_event.id):
+            await add_memory(
+                session,
+                actor.id,
+                f"Я отреагировал на событие в личном ответе: {active_event.text}",
+                source=f"evt_rx_{active_event.id}",
+            )
+
+        await session.commit()
+        self._last_sent_at[actor.id] = datetime.utcnow()
+
+        payload_message = {
+            "type": "message",
+            "agent_id": actor.id,
+            "sender": "agent",
+            "text": reply_db,
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+        }
+        payload_chat = {
+            "type": "chat_message",
+            "id": chat_row.id,
+            "sender_type": "agent",
+            "sender_agent_id": actor.id,
+            "sender_name": actor.name,
+            "receiver_agent_id": None,
+            "receiver_name": None,
+            "text": reply_db,
+            "topic": chat_topic,
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+        }
+        await self._event_bus.publish(payload_message)
+        await self._event_bus.publish(payload_chat)
+        await self._ws_hub.broadcast(payload_message)
+        await self._ws_hub.broadcast(payload_chat)
+
+    async def _build_direct_reply(self, session, actor: Agent, topic: str) -> str:
+        recent_direct = await _recent_direct_context(session, actor.id)
+        llm_chat = None
+        if self._can_use_llm(self._last_dialogue_llm_at, actor.id):
+            llm_chat = await self._llm.generate_dialogue_message(
+                actor_name=actor.name,
+                actor_personality=actor.personality,
+                actor_mood=actor.mood_text,
+                target_name="Пользователь",
+                topic=topic,
+                recent_messages=recent_direct,
+            )
+            if llm_chat:
+                self._last_dialogue_llm_at[actor.id] = datetime.utcnow()
+        text = _clean_message(llm_chat or "")
+        if _is_quality_message(text):
+            return text
+        return "Я услышал запрос. Предлагаю сразу выбрать один конкретный следующий шаг и зафиксировать его."
 
     def _pick_actor_target(self, by_id: dict[int, Agent]) -> tuple[Agent, Agent] | None:
         pending_candidates = [aid for aid in self._pending_reply if aid in by_id and self._pending_reply[aid] in by_id]
@@ -333,6 +491,18 @@ async def _recent_chat_context(session, agent_a_id: int, agent_b_id: int) -> lis
     return [f"{'agent:'+str(r.sender_agent_id) if r.sender_agent_id else r.sender_type}: {r.text}" for r in rows]
 
 
+async def _recent_direct_context(session, agent_id: int) -> list[str]:
+    stmt = (
+        select(Message)
+        .where(Message.agent_id == agent_id)
+        .order_by(Message.created_at.desc())
+        .limit(8)
+    )
+    rows = list((await session.scalars(stmt)).all())
+    rows.reverse()
+    return [f"{row.sender}: {row.text}" for row in rows]
+
+
 async def _is_duplicate_chat(session, sender_id: int, receiver_id: int, text: str) -> bool:
     stmt = (
         select(ChatMessage)
@@ -388,11 +558,7 @@ async def _latest_user_event(session, not_before: datetime | None = None) -> Eve
     if not_before is not None and latest.created_at < not_before:
         return None
 
-    created_at = latest.created_at
-    if created_at.tzinfo is not None:
-        created_at = created_at.replace(tzinfo=None)
-
-    age_seconds = (datetime.utcnow() - created_at).total_seconds()
+    age_seconds = _event_age_seconds(latest)
     if age_seconds > 10 * 60:
         return None
     return latest
@@ -403,6 +569,41 @@ async def _has_agent_reacted_to_event(session, agent_id: int, event_id: int) -> 
     stmt = select(Memory.id).where(Memory.agent_id == agent_id, Memory.source == marker).limit(1)
     row = await session.scalar(stmt)
     return row is not None
+
+
+async def _collect_pending_user_messages(
+    session,
+    by_id: dict[int, Agent],
+) -> list[tuple[Agent, Message]]:
+    out: list[tuple[Agent, Message]] = []
+    for aid, agent in by_id.items():
+        user_last = await session.scalar(
+            select(Message).where(Message.agent_id == aid, Message.sender == "user").order_by(Message.created_at.desc()).limit(1)
+        )
+        if not user_last:
+            continue
+        agent_last = await session.scalar(
+            select(Message).where(Message.agent_id == aid, Message.sender == "agent").order_by(Message.created_at.desc()).limit(1)
+        )
+        if not agent_last or agent_last.created_at < user_last.created_at:
+            out.append((agent, user_last))
+    out.sort(key=lambda item: item[1].created_at)
+    return out
+
+
+def _event_age_seconds(event: Event) -> float:
+    created_at = event.created_at
+    if created_at.tzinfo is not None:
+        created_at = created_at.replace(tzinfo=None)
+    return (datetime.utcnow() - created_at).total_seconds()
+
+
+def _build_event_focused_chat(target_name: str, event_text: str) -> str:
+    return _clean_message(f"{target_name}, фокус только на событии: {event_text}. Предлагаю зафиксировать шаг по нему прямо сейчас.")
+
+
+def _build_event_only_reply(event_text: str) -> str:
+    return _clean_message(f"Сейчас отвечаю только по событию: {event_text}. Предлагаю определить ближайший шаг и ответственного.")
 
 
 def _clean_message(text: str) -> str:
