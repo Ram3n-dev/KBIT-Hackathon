@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     simulation_tick_seconds: float = 6.0
     db_connect_retries: int = 20
     db_connect_retry_delay_seconds: float = 1.5
+    simulation_active_user_ttl_seconds: int = 45
 
     llm_provider: str = "none"  # none | deepseek | gigachat
     llm_model: str = "deepseek/deepseek-v3.2"

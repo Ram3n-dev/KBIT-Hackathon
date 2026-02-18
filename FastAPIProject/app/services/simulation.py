@@ -14,6 +14,7 @@ from app.realtime import EventBus, WsHub
 from app.services.llm import get_llm_service
 from app.services.memory import add_memory, retrieve_relevant_memories
 from app.services.plans import compact_plan_text, normalize_plan_text, set_current_plan
+from app.services.presence import is_user_active
 
 
 settings = get_settings()
@@ -125,6 +126,9 @@ class SimulationEngine:
                 worlds.setdefault(agent.user_id, []).append(agent)
 
             for user_id, world_agents in worlds.items():
+                if not is_user_active(user_id, settings.simulation_active_user_ttl_seconds):
+                    self._cleanup_inactive_world(world_agents)
+                    continue
                 world_speed = await self._get_world_speed(session, user_id)
                 if world_speed < 1.0 and random.random() > world_speed:
                     continue
@@ -493,6 +497,18 @@ class SimulationEngine:
         if not last:
             return True
         return (datetime.utcnow() - last).total_seconds() >= max(8, settings.llm_agent_cooldown_seconds // 2)
+
+    def _cleanup_inactive_world(self, agents: list[Agent]) -> None:
+        world_ids = {agent.id for agent in agents}
+        if not world_ids:
+            return
+        self._last_step_llm_at = {k: v for k, v in self._last_step_llm_at.items() if k not in world_ids}
+        self._last_dialogue_llm_at = {k: v for k, v in self._last_dialogue_llm_at.items() if k not in world_ids}
+        self._last_sent_at = {k: v for k, v in self._last_sent_at.items() if k not in world_ids}
+        self._pending_reply = {k: v for k, v in self._pending_reply.items() if k not in world_ids and v not in world_ids}
+        self._pair_topics = {
+            pair: state for pair, state in self._pair_topics.items() if pair[0] not in world_ids and pair[1] not in world_ids
+        }
 
 
 async def _get_or_create_relation(session, source_id: int, target_id: int) -> Relationship:

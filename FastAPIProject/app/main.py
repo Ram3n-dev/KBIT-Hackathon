@@ -62,6 +62,7 @@ from app.services.avatars import (
 )
 from app.services.memory import add_memory, retrieve_relevant_memories
 from app.services.plans import compact_plan_text, set_current_plan
+from app.services.presence import mark_user_active, mark_user_inactive
 from app.services.simulation import SimulationEngine
 
 
@@ -142,6 +143,7 @@ async def auth_register(payload: AuthRegisterIn, db: AsyncSession = Depends(get_
     await db.refresh(user)
     await _ensure_simulation_state_row(db, user.id, 1.0)
     await db.commit()
+    mark_user_active(user.id)
     token = _create_token(user.id)
     return AuthOut(access_token=token, user=UserOut.model_validate(user))
 
@@ -154,6 +156,7 @@ async def auth_login(payload: AuthLoginIn, db: AsyncSession = Depends(get_db)) -
     if user.password_hash.startswith("sha256$"):
         user.password_hash = _hash_password(payload.password)
         await db.commit()
+    mark_user_active(user.id)
     token = _create_token(user.id)
     return AuthOut(access_token=token, user=UserOut.model_validate(user))
 
@@ -206,7 +209,18 @@ async def get_avatar_file(file_name: str) -> FileResponse:
 
 
 @app.post("/auth/logout")
-async def auth_logout() -> dict:
+async def auth_logout(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    user = await _get_current_user(credentials, db)
+    mark_user_inactive(user.id)
+    return {"status": "ok"}
+
+
+@app.post("/session/ping")
+async def session_ping(user: User = Depends(_require_user)) -> dict:
+    mark_user_active(user.id)
     return {"status": "ok"}
 
 
@@ -951,6 +965,7 @@ async def _get_current_user(credentials: HTTPAuthorizationCredentials | None, db
     user = await db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=401, detail="РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ РЅРµ РЅР°Р№РґРµРЅ")
+    mark_user_active(user.id)
     return user
 
 
