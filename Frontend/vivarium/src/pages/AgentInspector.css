@@ -127,7 +127,7 @@
 }
 
 .agent-name-header h3::after {
-  content: '';
+  content: "";
   position: absolute;
   bottom: 0;
   left: 25%;
@@ -223,7 +223,7 @@
 }
 
 .plan-item::before {
-  content: '•';
+  content: "•";
   position: absolute;
   left: 15px;
   color: #aab97e;
@@ -247,7 +247,7 @@
 }
 
 .thought-bubble::before {
-  content: '';
+  content: "";
   position: absolute;
   top: -10px;
   left: 30px;
@@ -271,14 +271,276 @@
   .agent-info-panel {
     padding: 20px;
   }
-  
+
   .relationship-item {
     flex-direction: column;
     gap: 10px;
     text-align: center;
   }
-  
+
   .thought-bubble::before {
     left: 20px;
   }
+}
+/* Режим редактирования */
+.view-mode {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  position: relative;
+}
+
+.edit-agent-btn {
+  background: #aab97e;
+  border: none;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  font-size: 18px;
+  color: #454135;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  margin-left: 10px;
+}
+
+.edit-agent-btn:hover {
+  background: #f1e8c7;
+  transform: scale(1.1);
+}
+
+.edit-mode {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+  width: 100%;
+}
+
+.edit-name-input {
+  width: 100%;
+  max-width: 300px;
+  padding: 12px 15px;
+  border: none;
+  border-radius: 15px;
+  background: #f1e8c7;
+  font-size: 18px;
+  color: #454135;
+  text-align: center;
+}
+
+.edit-name-input:focus {
+  outline: 2px solid #aab97e;
+}
+
+.edit-avatar-selector {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #f1e8c7;
+  font-size: 16px;
+}
+
+.edit-avatar-input {
+  width: 60px;
+  padding: 8px;
+  border: none;
+  border-radius: 10px;
+  background: #f1e8c7;
+  font-size: 20px;
+  color: #454135;
+  text-align: center;
+}
+
+.edit-avatar-input:focus {
+  outline: 2px solid #aab97e;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 15px;
+  margin-top: 10px;
+}
+
+.save-btn,
+.edit-actions .cancel-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 15px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.save-btn {
+  background: #aab97e;
+  color: #454135;
+}
+
+.save-btn:hover {
+  background: #f1e8c7;
+  transform: scale(1.02);
+}
+
+.edit-actions .cancel-btn {
+  background: rgba(241, 232, 199, 0.2);
+  color: #f1e8c7;
+}
+
+.edit-actions .cancel-btn:hover {
+  background: rgba(241, 232, 199, 0.3);
+}
+/* Аватарка в заголовке */
+.agent-header-avatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  color: #f1e8c7;
+  margin-right: 15px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.view-mode {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  position: relative;
+  width: 100%;
+}
+
+/* Сетка аватарок для редактирования */
+.avatar-selector {
+  width: 100%;
+  margin: 20px 0;
+}
+
+.avatar-selector h4 {
+  color: #f1e8c7;
+  font-size: 16px;
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+.avatar-grid-small {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.avatar-option-small {
+  aspect-ratio: 1;
+  border-radius: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 3px solid transparent;
+}
+
+.avatar-option-small:hover {
+  transform: scale(1.05);
+  filter: brightness(1.1);
+}
+
+.avatar-option-small.selected {
+  border-color: #f1e8c7;
+  box-shadow: 0 0 0 2px #aab97e;
+}
+
+.avatar-emoji-small {
+  font-size: 24px;
+}
+
+/* Кнопка редактирования */
+.edit-agent-btn {
+  background: #aab97e;
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  font-size: 20px;
+  color: #454135;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  margin-left: 10px;
+}
+
+.edit-agent-btn:hover {
+  background: #f1e8c7;
+  transform: scale(1.1);
+}
+
+/* Режим редактирования */
+.edit-mode {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+  width: 100%;
+}
+
+.edit-name-input {
+  width: 100%;
+  max-width: 300px;
+  padding: 12px 15px;
+  border: none;
+  border-radius: 15px;
+  background: #f1e8c7;
+  font-size: 18px;
+  color: #454135;
+  text-align: center;
+}
+
+.edit-name-input:focus {
+  outline: 2px solid #aab97e;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 15px;
+  margin-top: 10px;
+}
+
+.save-btn, .edit-actions .cancel-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 15px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.save-btn {
+  background: #aab97e;
+  color: #454135;
+}
+
+.save-btn:hover {
+  background: #f1e8c7;
+  transform: scale(1.02);
+}
+
+.edit-actions .cancel-btn {
+  background: rgba(241, 232, 199, 0.2);
+  color: #f1e8c7;
+}
+
+.edit-actions .cancel-btn:hover {
+  background: rgba(241, 232, 199, 0.3);
 }

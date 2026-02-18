@@ -14,6 +14,7 @@ body {
 .app-container {
   display: flex;
   max-width: 1440px;
+  
   margin: 0 auto; /* Центрирование по середине */
   background-color: #faf2e5; /* Тот же бежевый для контейнера */
   width: 100%;
@@ -25,5 +26,5 @@ body {
   background-color: #dbdaae;
   border-radius: 40px;
   padding: 30px;
-  min-height: 944px;
+  max-height: 944px;
 }

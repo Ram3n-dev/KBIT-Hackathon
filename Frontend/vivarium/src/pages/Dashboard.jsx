@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import "./Pages.css";
+import "./DashBoard.css";
 import api from "../services/api";
 
-function Dashboard() {
+function Dashboard({ isAuthenticated, onLoginClick }) {
   const [eventText, setEventText] = useState("");
   const [selectedAgent, setSelectedAgent] = useState("");
   const [messageText, setMessageText] = useState("");
@@ -12,9 +13,11 @@ function Dashboard() {
 
   // Загрузка агентов при монтировании
   useEffect(() => {
-    loadAgents();
-    loadTimeSpeed();
-  }, []);
+    if (isAuthenticated) {
+      loadAgents();
+      loadTimeSpeed();
+    }
+  }, [isAuthenticated]);
 
   const loadAgents = async () => {
     try {
@@ -75,6 +78,26 @@ function Dashboard() {
       console.error("Ошибка изменения скорости:", error);
     }
   };
+
+  // Заглушка для неавторизованных пользователей
+  if (!isAuthenticated) {
+    return (
+      <div className="content-page dashboard-page">
+        <h1>Панель управления</h1>
+        <div className="auth-required">
+          <div className="auth-required-icon">⚙️</div>
+          <h2>Доступ ограничен</h2>
+          <p>Пожалуйста, авторизуйтесь, чтобы управлять событиями и агентами</p>
+          <button 
+            className="auth-required-btn" 
+            onClick={onLoginClick}
+          >
+            Перейти к авторизации
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="content-page dashboard-page">

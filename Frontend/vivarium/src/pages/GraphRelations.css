@@ -93,7 +93,7 @@
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
 .zoom-btn:hover {
@@ -181,4 +181,21 @@
   color: #f1e8c7;
   font-size: 12px;
   margin: 3px 0;
+}
+.agent-avatar-svg {
+  font-size: 20px;
+  fill: #f1e8c7;
+  pointer-events: none;
+  user-select: none;
+}
+.agent-avatar-image {
+  border-radius: 50%;
+  object-fit: cover;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+.agent-avatar-image {
+  border-radius: 50%;
+  object-fit: cover;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
 }

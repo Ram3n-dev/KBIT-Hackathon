@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import "./DeleteAgentPanel.css";
 import api from "../services/api";
 
@@ -6,12 +6,28 @@ function DeleteAgentPanel({ isOpen, onClose, onDeleteAgent, agents }) {
   const [selectedAgent, setSelectedAgent] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Сбрасываем выбранного агента при открытии/закрытии или изменении списка
+  useEffect(() => {
+    if (!isOpen) {
+      setSelectedAgent("");
+    }
+  }, [isOpen]);
+
+  // Обновляем список при изменении agents
+  useEffect(() => {
+    // Если текущий выбранный агент больше не существует, сбрасываем выбор
+    if (selectedAgent && !agents.some(a => a.id === parseInt(selectedAgent))) {
+      setSelectedAgent("");
+    }
+  }, [agents, selectedAgent]);
+
   const handleDelete = async () => {
     if (!selectedAgent) return;
     
     setLoading(true);
     try {
-      await onDeleteAgent(selectedAgent);
+      await onDeleteAgent(parseInt(selectedAgent));
+      // Не сбрасываем selectedAgent здесь, так как панель закроется
     } catch (error) {
       console.error("Ошибка удаления:", error);
     } finally {

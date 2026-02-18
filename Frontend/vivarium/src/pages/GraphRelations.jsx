@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 import "./Pages.css";
-import "./page_GraphRelations.css";
+import "./GraphRelations.css";
 import api from "../services/api";
+import { getAvatarByFile } from "../utils/avatarMap";
 
-function GraphRelations() {
+function GraphRelations({ isAuthenticated, onLoginClick }) {
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [hoveredRelation, setHoveredRelation] = useState(null);
   const [scale, setScale] = useState(1);
@@ -16,10 +17,14 @@ function GraphRelations() {
   
   const graphRef = useRef(null);
 
-  // Загрузка данных
+  // Загрузка данных только если авторизован
   useEffect(() => {
-    loadData();
-  }, []);
+    if (isAuthenticated) {
+      loadData();
+    } else {
+      setLoading(false);
+    }
+  }, [isAuthenticated]);
 
   const loadData = async () => {
     setLoading(true);
@@ -95,6 +100,26 @@ function GraphRelations() {
     return 2 + value * 3;
   };
 
+  // Заглушка для неавторизованных пользователей
+  if (!isAuthenticated) {
+    return (
+      <div className="content-page graph-page">
+        <h1>Граф отношений</h1>
+        <div className="auth-required">
+          <div className="auth-required-icon">🕸️</div>
+          <h2>Доступ ограничен</h2>
+          <p>Пожалуйста, авторизуйтесь, чтобы увидеть граф отношений между агентами</p>
+          <button 
+            className="auth-required-btn" 
+            onClick={onLoginClick}
+          >
+            Перейти к авторизации
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return <div className="content-page">Загрузка графа...</div>;
   }
@@ -164,14 +189,15 @@ function GraphRelations() {
                 );
               })}
 
-              {/* Рисуем узлы */}
+              {/* Рисуем узлы с аватарками */}
               {agents.map(agent => (
                 <g key={agent.id}>
+                  {/* Круг агента с цветом фона */}
                   <circle
                     cx={agent.x}
                     cy={agent.y}
-                    r={selectedAgent === agent.id ? 25 : 20}
-                    fill="#5d6939"
+                    r={selectedAgent === agent.id ? 30 : 25}
+                    fill={agent.avatarColor || "#5d6939"}
                     stroke="#f1e8c7"
                     strokeWidth={selectedAgent === agent.id ? 4 : 2}
                     className="agent-node"
@@ -179,9 +205,20 @@ function GraphRelations() {
                     onMouseLeave={() => setSelectedAgent(null)}
                   />
                   
+                  {/* Аватар (изображение) */}
+                  <image
+                    href={getAvatarByFile(agent.avatarFile)}
+                    x={agent.x - (selectedAgent === agent.id ? 22 : 18)}
+                    y={agent.y - (selectedAgent === agent.id ? 22 : 18)}
+                    width={selectedAgent === agent.id ? 44 : 36}
+                    height={selectedAgent === agent.id ? 44 : 36}
+                    className="agent-avatar-image"
+                  />
+                  
+                  {/* Имя агента */}
                   <text
                     x={agent.x}
-                    y={agent.y + 30}
+                    y={agent.y + 45}
                     textAnchor="middle"
                     className="agent-label"
                     fill="#454135"

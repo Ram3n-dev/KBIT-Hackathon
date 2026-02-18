@@ -42,7 +42,7 @@ function App() {
         id: profile.id,
         name: profile.username,
         email: profile.email,
-        avatar: profile.avatar || "👤"
+        avatarUrl: profile.avatarUrl || null
       };
       setUser(userData);
       localStorage.setItem("user", JSON.stringify(userData));
@@ -170,13 +170,21 @@ function App() {
             <Route
               path="/"
               element={
-                <Dashboard agents={agents} isAuthenticated={isAuthenticated} />
+                <Dashboard 
+                  agents={agents} 
+                  isAuthenticated={isAuthenticated}
+                  onLoginClick={() => setIsAuthModalOpen(true)}
+                />
               }
             />
             <Route
               path="/chat-bots"
               element={
-                <ChatBots agents={agents} isAuthenticated={isAuthenticated} />
+                <ChatBots 
+                  agents={agents} 
+                  isAuthenticated={isAuthenticated}
+                  onLoginClick={() => setIsAuthModalOpen(true)}
+                />
               }
             />
             <Route
@@ -185,6 +193,7 @@ function App() {
                 <GraphRelations
                   agents={agents}
                   isAuthenticated={isAuthenticated}
+                  onLoginClick={() => setIsAuthModalOpen(true)}
                 />
               }
             />
@@ -194,13 +203,18 @@ function App() {
                 <AgentInspector
                   agents={agents}
                   isAuthenticated={isAuthenticated}
+                  onLoginClick={() => setIsAuthModalOpen(true)}
                 />
               }
             />
             <Route
               path="/dashboard"
               element={
-                <Dashboard agents={agents} isAuthenticated={isAuthenticated} />
+                <Dashboard 
+                  agents={agents} 
+                  isAuthenticated={isAuthenticated}
+                  onLoginClick={() => setIsAuthModalOpen(true)}
+                />
               }
             />
           </Routes>

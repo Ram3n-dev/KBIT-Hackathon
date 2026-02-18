@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import "./Pages.css";
-import "./page_agentinspector.css";
+import "./AgentInspector.css";
 import api from "../services/api";
+import { avatarOptions, getAvatarByFile } from "../utils/avatarMap";
 
-function AgentInspector() {
+function AgentInspector({ isAuthenticated, onLoginClick }) {
   const [selectedAgent, setSelectedAgent] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [agents, setAgents] = useState([]);
@@ -12,18 +13,30 @@ function AgentInspector() {
   const [plans, setPlans] = useState([]);
   const [reflection, setReflection] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editedName, setEditedName] = useState("");
+  const [selectedAvatar, setSelectedAvatar] = useState(null);
 
   // Загрузка списка агентов
   useEffect(() => {
-    loadAgents();
-  }, []);
+    if (isAuthenticated) {
+      loadAgents();
+    }
+  }, [isAuthenticated]);
 
   // Загрузка данных агента при выборе
   useEffect(() => {
-    if (selectedAgent) {
+    if (selectedAgent && agents.length > 0) {
       loadAgentData(selectedAgent);
+      const agent = agents.find(a => a.id === parseInt(selectedAgent));
+      if (agent) {
+        setEditedName(agent.name);
+        // Находим соответствующий аватар по имени файла
+        const avatar = avatarOptions.find(a => a.file === agent.avatarFile);
+        setSelectedAvatar(avatar || avatarOptions[0]);
+      }
     }
-  }, [selectedAgent]);
+  }, [selectedAgent, agents]);
 
   const loadAgents = async () => {
     try {
@@ -55,10 +68,59 @@ function AgentInspector() {
     }
   };
 
+  const handleEdit = () => {
+    setIsEditMode(true);
+  };
+
+  const handleSave = async () => {
+    try {
+      await api.updateAgent(parseInt(selectedAgent), {
+        name: editedName,
+        avatarFile: selectedAvatar.file,
+        avatarColor: selectedAvatar.color
+      });
+      setIsEditMode(false);
+      loadAgents();
+    } catch (error) {
+      console.error("Ошибка сохранения:", error);
+    }
+  };
+
+  const handleCancel = () => {
+    setIsEditMode(false);
+    const agent = agents.find(a => a.id === parseInt(selectedAgent));
+    if (agent) {
+      setEditedName(agent.name);
+      const avatar = avatarOptions.find(a => a.file === agent.avatarFile);
+      setSelectedAvatar(avatar || avatarOptions[0]);
+    }
+  };
+
   const selectedAgentData = agents.find(a => a.id === parseInt(selectedAgent));
+
+  // Заглушка для неавторизованных пользователей
+  if (!isAuthenticated) {
+    return (
+      <div className="content-page inspector-page">
+        <h1>Инспектор агента</h1>
+        <div className="auth-required">
+          <div className="auth-required-icon">🔍</div>
+          <h2>Доступ ограничен</h2>
+          <p>Пожалуйста, авторизуйтесь, чтобы инспектировать агентов</p>
+          <button 
+            className="auth-required-btn" 
+            onClick={onLoginClick}
+          >
+            Перейти к авторизации
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="content-page inspector-page">
+      <h1>Инспектор агента</h1>
       <div className="inspector-container">
         {/* Выпадающий список агентов */}
         <div className="inspector-select-section">
@@ -95,7 +157,60 @@ function AgentInspector() {
         {selectedAgent && !loading && (
           <div className="agent-info-panel">
             <div className="agent-name-header">
-              <h3>{selectedAgentData?.name}</h3>
+              {isEditMode ? (
+                <div className="edit-mode">
+                  <input
+                    type="text"
+                    className="edit-name-input"
+                    value={editedName}
+                    onChange={(e) => setEditedName(e.target.value)}
+                    placeholder="Имя агента"
+                  />
+                  
+                  <div className="avatar-selector">
+                    <h4>Выберите аватар:</h4>
+                    <div className="avatar-grid-small">
+                      {avatarOptions.map((avatar) => (
+                        <div
+                          key={avatar.id}
+                          className={`avatar-option-small ${selectedAvatar?.id === avatar.id ? 'selected' : ''}`}
+                          onClick={() => setSelectedAvatar(avatar)}
+                          style={{ backgroundColor: avatar.color }}
+                        >
+                          <img 
+                            src={avatar.image} 
+                            alt={avatar.name}
+                            className="avatar-option-image"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="edit-actions">
+                    <button className="save-btn" onClick={handleSave}>Сохранить</button>
+                    <button className="cancel-btn" onClick={handleCancel}>Отмена</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="view-mode">
+                  {/* Аватарка слева от имени */}
+                  <div 
+                    className="agent-header-avatar"
+                    style={{ backgroundColor: selectedAgentData?.avatarColor || "#5d6939" }}
+                  >
+                    <img 
+                      src={getAvatarByFile(selectedAgentData?.avatarFile)} 
+                      alt={selectedAgentData?.name}
+                      className="avatar-image"
+                    />
+                  </div>
+                  <h3>{selectedAgentData?.name}</h3>
+                  <button className="edit-agent-btn" onClick={handleEdit} title="Редактировать агента">
+                    ✎
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Отношения к другим агентам */}

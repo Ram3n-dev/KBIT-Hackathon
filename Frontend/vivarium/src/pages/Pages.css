@@ -8,76 +8,7 @@
   text-align: center;
 }
 
-/* Верхний ряд с тремя блоками */
-.dashboard-top-row {
-  display: grid;
-  grid-template-rows: 233px 467px 72px;
-  gap: 20px;
-  justify-content: center;
-  margin-bottom: 30px;
-}
-
-/* Общие стили для всех панелей */
-.event-panel,
-.message-panel {
-  background: #5d6939;
-  border-radius: 20px;
-  padding: 25px;
-  width: 556px;
-}
-
-/* Заголовки панелей событий и сообщений */
-.event-panel h2,
-.message-panel h2 {
-  color: #f1e8c7;
-  width: 408px;
-  text-align: center;
-  font-size: 24px;
-  margin-bottom: 15px;
-  font-weight: 800;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-/* Обертка для поля ввода с иконкой */
-.input-wrapper {
-  position: relative;
-  width: 408px;
-  margin-left: auto;
-  margin-right: auto;
-  margin-bottom: 15px;
-}
-
-/* Поля ввода */
-.event-input,
-.message-input,
-.agent-select {
-  width: 100%;
-  padding: 15px;
-  border: none;
-  border-radius: 20px;
-  background: #f1e8c7;
-  font-size: 16px;
-  color: #454135;
-  display: block;
-}
-
-.event-input {
-  height: 88px;
-  resize: none;
-}
-
-.message-input {
-  height: 226px;
-  resize: none;
-}
-
-.event-input::placeholder,
-.message-input::placeholder {
-  color: #8b8b7a;
-}
-
-/* Иконка карандаша */
+/* Иконка карандаша (общая для всех страниц) */
 .edit-icon {
   position: absolute;
   right: 15px;
@@ -88,161 +19,81 @@
   z-index: 1;
 }
 
-/* Для textarea корректировка позиции */
+/* Для textarea корректировка позиции (общая) */
 .event-panel .edit-icon {
   top: 25px;
   transform: none;
 }
 
-/* Выпадающий список */
-.agent-select {
-  cursor: pointer;
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  background-repeat: no-repeat;
-  background-position: right 15px center;
-  background-size: 16px;
-  max-height: 200px;
-}
-
-.agent-select:focus,
-.event-input:focus,
-.message-input:focus {
-  outline: 2px solid #aab97e;
-  background-color: #faf2e5;
-}
-
-/* Стили для опций выпадающего списка */
-.agent-select option {
-  background: #f1e8c7;
-  color: #454135;
-  padding: 10px;
-}
-
-/* Стилизация скроллбара */
-.agent-select::-webkit-scrollbar {
-  width: 8px;
-}
-
-.agent-select::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 4px;
-}
-
-.agent-select::-webkit-scrollbar-thumb {
-  background: #aab97e;
-  border-radius: 4px;
-}
-
-.agent-select::-webkit-scrollbar-thumb:hover {
-  background: #5d6939;
-}
-
-/* Отключенные состояния */
+/* Отключенные состояния (общие) */
 .message-input:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-/* Блок скорости времени */
-.time-speed-panel {
+/* Кнопки (общие) */
+.auth-required-btn {
+  padding: 15px 40px;
   background: #5d6939;
-  border-radius: 20px;
-  padding: 20px 25px;
-  width: 556px;
-  height: 72px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-
-.speed-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-}
-
-.time-speed-panel h2 {
+  border: none;
+  border-radius: 30px;
   color: #f1e8c7;
-  font-size: 20px;
-  font-weight: 800;
-  margin: 0;
-  width: auto;
-  text-align: left;
-  line-height: 1;
-}
-
-.speed-controls {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  line-height: 1;
-}
-
-.speed-value {
   font-size: 18px;
-  font-weight: 500;
-  color: #f1e8c7;
-  min-width: 40px;
-  text-align: right;
-}
-
-.speed-slider {
-  width: 200px;
-  height: 6px;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.3);
-  outline: none;
-  -webkit-appearance: none;
-}
-
-.speed-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #f1e8c7;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.speed-slider::-webkit-slider-thumb:hover {
-  background: #ffffff;
-  transform: scale(1.1);
-}
-
-/* Карточки панели управления */
-.dashboard-cards {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
-  margin-top: 30px;
-}
-.user {
-  display: flex;
-  margin: 40px auto 0 auto;  /* добавлен отступ сверху */
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  background: #aab97e;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
-  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(93, 105, 57, 0.3);
 }
 
-.user:hover {
-  transform: scale(1.1);
-  background: #5d6939;
+.auth-required-btn:hover {
+  background: #aab97e;
+  color: #454135;
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(170, 185, 126, 0.4);
 }
 
-.user img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+/* Заглушка для неавторизованных пользователей */
+.auth-required {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(93, 105, 57, 0.1);
+  border-radius: 40px;
+  padding: 60px 40px;
+  text-align: center;
+  min-height: 500px;
+  backdrop-filter: blur(5px);
+  border: 2px dashed #5d6939;
 }
 
-.user:active {
-  transform: scale(0.95);
+.auth-required-icon {
+  font-size: 80px;
+  margin-bottom: 20px;
+  animation: float 3s ease-in-out infinite;
+}
+
+.auth-required h2 {
+  color: #5d6939;
+  font-size: 32px;
+  font-weight: 800;
+  margin-bottom: 15px;
+}
+
+.auth-required p {
+  color: #454135;
+  font-size: 18px;
+  max-width: 400px;
+  margin-bottom: 30px;
+  line-height: 1.6;
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
 }

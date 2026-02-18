@@ -1,23 +1,36 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import "./CreateAgentPanel.css";
 import api from "../services/api";
-import ava from "../img/Union.svg";
-
-const avatarOptions = [
-  { id: 1, svg: "🤖", color: "#4CAF50", name: "Робот" },
-  { id: 2, svg: "👤", color: "#FFC107", name: "Человек" },
-  { id: 3, svg: "🐱", color: "#F44336", name: "Кот" },
-  { id: 4, svg: "🐶", color: "#5d6939", name: "Собака" },
-  { id: 5, svg: "🦊", color: "#aab97e", name: "Лиса" },
-  { id: 6, svg: "🦉", color: "#8b8b7a", name: "Сова" },
-  { id: 7, svg: "⭐", color: "#FFD700", name: "Звезда" },
-  { id: 8, svg: "🌈", color: "#4CAF50", name: "Радуга" },
-];
+import { avatarOptions } from "../utils/avatarMap";
 
 function CreateAgentPanel({ isOpen, onClose, onCreateAgent }) {
   const [agentName, setAgentName] = useState("");
   const [selectedAvatar, setSelectedAvatar] = useState(avatarOptions[0]);
   const [loading, setLoading] = useState(false);
+  const [avatars, setAvatars] = useState([]);
+
+  // Загружаем список доступных аватарок с бэкенда
+  useEffect(() => {
+    if (isOpen) {
+      loadAvatars();
+    }
+  }, [isOpen]);
+
+  const loadAvatars = async () => {
+    try {
+      const data = await api.getAvatars();
+      if (data && data.length > 0) {
+        setAvatars(data);
+      } else {
+        // Если бэкенд не вернул аватарки, используем локальные
+        setAvatars(avatarOptions);
+      }
+    } catch (error) {
+      console.error("Ошибка загрузки аватарок:", error);
+      // В случае ошибки используем локальные
+      setAvatars(avatarOptions);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -27,7 +40,7 @@ function CreateAgentPanel({ isOpen, onClose, onCreateAgent }) {
     try {
       const newAgent = {
         name: agentName,
-        avatar: selectedAvatar.svg,
+        avatarFile: selectedAvatar.file, // отправляем только имя файла
         avatarColor: selectedAvatar.color,
         avatarName: selectedAvatar.name
       };
@@ -56,14 +69,14 @@ function CreateAgentPanel({ isOpen, onClose, onCreateAgent }) {
           <div className="avatar-section">
             <h3>Выберите аватар</h3>
             <div className="avatar-grid">
-              {avatarOptions.map((avatar) => (
+              {avatars.map((avatar) => (
                 <div
                   key={avatar.id}
                   className={`avatar-option ${selectedAvatar.id === avatar.id ? 'selected' : ''}`}
                   onClick={() => setSelectedAvatar(avatar)}
                   style={{ backgroundColor: avatar.color }}
                 >
-                  <span className="avatar-emoji">{avatar.svg}</span>
+                  <img src={avatar.image} alt={avatar.name} className="avatar-image" />
                 </div>
               ))}
             </div>
@@ -89,7 +102,11 @@ function CreateAgentPanel({ isOpen, onClose, onCreateAgent }) {
                 className="preview-avatar"
                 style={{ backgroundColor: selectedAvatar.color }}
               >
-                <span className="preview-emoji">{selectedAvatar.svg}</span>
+                <img 
+                  src={selectedAvatar.image} 
+                  alt={selectedAvatar.name}
+                  className="avatar-image preview-avatar-image"
+                />
               </div>
               <span className="preview-name">
                 {agentName || "Имя агента"}

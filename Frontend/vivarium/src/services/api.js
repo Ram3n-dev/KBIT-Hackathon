@@ -40,8 +40,15 @@ class ApiService {
     }
   }
 
+  // ============= АВАТАРКИ =============
+  async getAvatars() {
+    return this.fetchWithError(`${API_URL}/avatars`, {
+      headers: this.getHeaders(),
+    });
+  }
+
   // ============= АВТОРИЗАЦИЯ =============
-  
+
   async login(username, password) {
     const response = await fetch(`${API_URL}/auth/login`, {
       method: "POST",
@@ -51,17 +58,16 @@ class ApiService {
     const data = await response.json();
     if (response.ok) {
       this.setToken(data.access_token);
-      // Сохраняем пользователя в localStorage
       const userData = {
         id: data.user.id,
         name: data.user.username,
         email: data.user.email,
-        avatar: data.user.avatar || "👤"
+        avatarUrl: data.user.avatarUrl || null,
       };
       localStorage.setItem("user", JSON.stringify(userData));
       return {
         token: data.access_token,
-        user: userData
+        user: userData,
       };
     }
     throw new Error(data.message || "Ошибка входа");
@@ -76,17 +82,16 @@ class ApiService {
     const data = await response.json();
     if (response.ok) {
       this.setToken(data.access_token);
-      // Сохраняем пользователя в localStorage
       const userData = {
         id: data.user.id,
         name: data.user.username,
         email: data.user.email,
-        avatar: data.user.avatar || "👤"
+        avatarUrl: data.user.avatarUrl || null,
       };
       localStorage.setItem("user", JSON.stringify(userData));
       return {
         token: data.access_token,
-        user: userData
+        user: userData,
       };
     }
     throw new Error(data.message || "Ошибка регистрации");
@@ -106,7 +111,7 @@ class ApiService {
   }
 
   // ============= АГЕНТЫ =============
-  
+
   async getAgents() {
     return this.fetchWithError(`${API_URL}/agents`, {
       headers: this.getHeaders(),
@@ -143,7 +148,7 @@ class ApiService {
   }
 
   // ============= ОТНОШЕНИЯ =============
-  
+
   async getRelations() {
     return this.fetchWithError(`${API_URL}/relations`, {
       headers: this.getHeaders(),
@@ -180,7 +185,7 @@ class ApiService {
   }
 
   // ============= НАСТРОЕНИЕ =============
-  
+
   async getAgentMood(agentId) {
     return this.fetchWithError(`${API_URL}/agents/${agentId}/mood`, {
       headers: this.getHeaders(),
@@ -196,7 +201,7 @@ class ApiService {
   }
 
   // ============= ПЛАНЫ И РЕФЛЕКСИЯ =============
-  
+
   async getAgentPlans(agentId) {
     return this.fetchWithError(`${API_URL}/agents/${agentId}/plans`, {
       headers: this.getHeaders(),
@@ -226,7 +231,7 @@ class ApiService {
   }
 
   // ============= СОБЫТИЯ =============
-  
+
   async getEvents() {
     return this.fetchWithError(`${API_URL}/events`, {
       headers: this.getHeaders(),
@@ -242,7 +247,7 @@ class ApiService {
   }
 
   // ============= СООБЩЕНИЯ =============
-  
+
   async sendMessage(messageData) {
     return this.fetchWithError(`${API_URL}/messages`, {
       method: "POST",
@@ -258,7 +263,7 @@ class ApiService {
   }
 
   // ============= ЧАТ (ОБЩИЙ) =============
-  
+
   async getChatMessages(limit = 50) {
     return this.fetchWithError(`${API_URL}/chat/messages?limit=${limit}`, {
       headers: this.getHeaders(),
@@ -267,14 +272,31 @@ class ApiService {
 
   async sendChatMessage(messageData) {
     return this.fetchWithError(`${API_URL}/chat/messages`, {
-      method: 'POST',
+      method: "POST",
       headers: this.getHeaders(),
       body: JSON.stringify(messageData),
     });
   }
 
+  async clearChat() {
+    return this.fetchWithError(`${API_URL}/chat/clear`, {
+      method: "POST",
+      headers: this.getHeaders(),
+    });
+  }
+
+  async getNewChatMessages(lastMessageId) {
+    const url = lastMessageId
+      ? `${API_URL}/chat/messages?after=${lastMessageId}`
+      : `${API_URL}/chat/messages`;
+
+    return this.fetchWithError(url, {
+      headers: this.getHeaders(),
+    });
+  }
+
   // ============= СКОРОСТЬ ВРЕМЕНИ =============
-  
+
   async getTimeSpeed() {
     return this.fetchWithError(`${API_URL}/time-speed`, {
       headers: this.getHeaders(),
