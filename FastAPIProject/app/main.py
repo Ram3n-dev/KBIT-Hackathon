@@ -1,37 +1,56 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+import hashlib
+import hmac
 import json
 import logging
 
-from fastapi import Depends, FastAPI, HTTPException, WebSocket
+import jwt
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func, select
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.database import get_db, init_db, SessionLocal
-from app.models import Agent, Event, Message, Plan, Relationship, SimulationState
+from app.database import SessionLocal, get_db, init_db
+from app.models import Agent, ChatMessage, Event, Message, Plan, Relationship, SimulationState, User
 from app.realtime import EventBus, WsHub
 from app.schemas import (
     AgentCreate,
     AgentOut,
     AgentRelationOut,
+    AgentUpdate,
+    AuthLoginIn,
+    AuthOut,
+    AuthRegisterIn,
+    ChatMessageCreate,
+    ChatMessageOut,
     EventCreate,
     LLMConfigPatch,
     LLMProviderInfoOut,
     LLMStatusOut,
     LLMTestOut,
     MessageCreate,
+    MessageOut,
     MoodOut,
+    MoodUpdate,
+    PlanCreate,
     PlanOut,
+    ReflectionUpdate,
+    RelationCreate,
+    RelationUpdate,
     TimeSpeedIn,
     TimeSpeedOut,
+    UserOut,
 )
-from app.services.memory import add_memory, retrieve_relevant_memories
 from app.services.llm import get_llm_service
+from app.services.memory import add_memory, retrieve_relevant_memories
 from app.services.simulation import SimulationEngine
 
 
@@ -44,6 +63,7 @@ event_bus = EventBus()
 ws_hub = WsHub()
 sim_engine = SimulationEngine(event_bus, ws_hub)
 llm_service = get_llm_service()
+bearer = HTTPBearer(auto_error=False)
 
 
 @asynccontextmanager
@@ -61,10 +81,23 @@ app = FastAPI(title=settings.app_name, lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
+    allow_origin_regex=settings.cors_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(_: Request, exc: HTTPException):
+    return JSONResponse(status_code=exc.status_code, content={"message": str(exc.detail)})
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(_: Request, exc: RequestValidationError):
+    first = exc.errors()[0] if exc.errors() else None
+    msg = first.get("msg", "Validation error") if first else "Validation error"
+    return JSONResponse(status_code=422, content={"message": msg})
 
 
 @app.get("/")
@@ -76,6 +109,45 @@ async def root() -> dict:
 async def health(db: AsyncSession = Depends(get_db)) -> dict:
     await db.execute(select(func.now()))
     return {"status": "healthy"}
+
+
+@app.post("/auth/register", response_model=AuthOut)
+async def auth_register(payload: AuthRegisterIn, db: AsyncSession = Depends(get_db)) -> AuthOut:
+    username = payload.username.strip()
+    email = payload.email.strip().lower()
+    exists = await db.scalar(select(User).where(or_(User.username == username, User.email == email)))
+    if exists:
+        raise HTTPException(status_code=400, detail="Пользователь уже существует")
+
+    user = User(username=username, email=email, password_hash=_hash_password(payload.password))
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    token = _create_token(user.id)
+    return AuthOut(access_token=token, user=UserOut.model_validate(user))
+
+
+@app.post("/auth/login", response_model=AuthOut)
+async def auth_login(payload: AuthLoginIn, db: AsyncSession = Depends(get_db)) -> AuthOut:
+    user = await db.scalar(select(User).where(User.username == payload.username.strip()))
+    if not user or not _verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Неверные учетные данные")
+    token = _create_token(user.id)
+    return AuthOut(access_token=token, user=UserOut.model_validate(user))
+
+
+@app.get("/auth/profile", response_model=UserOut)
+async def auth_profile(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+    db: AsyncSession = Depends(get_db),
+) -> UserOut:
+    user = await _get_current_user(credentials, db)
+    return UserOut.model_validate(user)
+
+
+@app.post("/auth/logout")
+async def auth_logout() -> dict:
+    return {"status": "ok"}
 
 
 @app.get("/llm/status", response_model=LLMStatusOut)
@@ -137,6 +209,29 @@ async def get_agent_by_id(agent_id: int, db: AsyncSession = Depends(get_db)) -> 
     return AgentOut.model_validate(agent)
 
 
+@app.put("/agents/{agent_id}", response_model=AgentOut)
+async def update_agent(agent_id: int, payload: AgentUpdate, db: AsyncSession = Depends(get_db)) -> AgentOut:
+    agent = await db.get(Agent, agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Агент не найден")
+
+    data = payload.model_dump(exclude_unset=True)
+    if "name" in data and data["name"]:
+        agent.name = data["name"].strip()
+    if "avatar" in data and data["avatar"] is not None:
+        agent.avatar = data["avatar"]
+    if "avatarColor" in data and data["avatarColor"] is not None:
+        agent.avatar_color = data["avatarColor"]
+    if "avatarName" in data and data["avatarName"] is not None:
+        agent.avatar_name = data["avatarName"]
+    if "personality" in data and data["personality"] is not None:
+        agent.personality = data["personality"]
+
+    await db.commit()
+    await db.refresh(agent)
+    return AgentOut.model_validate(agent)
+
+
 @app.delete("/agents/{agent_id}")
 async def delete_agent(agent_id: int, db: AsyncSession = Depends(get_db)) -> dict:
     agent = await db.get(Agent, agent_id)
@@ -151,6 +246,49 @@ async def delete_agent(agent_id: int, db: AsyncSession = Depends(get_db)) -> dic
 async def get_relations(db: AsyncSession = Depends(get_db)) -> list[dict]:
     rows = list((await db.scalars(select(Relationship))).all())
     return [{"from": r.source_agent_id, "to": r.target_agent_id, "value": round(r.score, 3)} for r in rows]
+
+
+@app.post("/relations")
+async def create_relation(payload: RelationCreate, db: AsyncSession = Depends(get_db)) -> dict:
+    if payload.from_agent_id == payload.to_agent_id:
+        raise HTTPException(status_code=400, detail="Нельзя создать связь агента с самим собой")
+    rel = await db.scalar(
+        select(Relationship).where(
+            Relationship.source_agent_id == payload.from_agent_id,
+            Relationship.target_agent_id == payload.to_agent_id,
+        )
+    )
+    if rel:
+        rel.score = payload.value
+    else:
+        rel = Relationship(
+            source_agent_id=payload.from_agent_id,
+            target_agent_id=payload.to_agent_id,
+            score=payload.value,
+        )
+        db.add(rel)
+    await db.commit()
+    return {"id": rel.id, "from": rel.source_agent_id, "to": rel.target_agent_id, "value": rel.score}
+
+
+@app.put("/relations/{relation_id}")
+async def update_relation(relation_id: int, payload: RelationUpdate, db: AsyncSession = Depends(get_db)) -> dict:
+    rel = await db.get(Relationship, relation_id)
+    if not rel:
+        raise HTTPException(status_code=404, detail="Связь не найдена")
+    rel.score = payload.value
+    await db.commit()
+    return {"id": rel.id, "from": rel.source_agent_id, "to": rel.target_agent_id, "value": rel.score}
+
+
+@app.delete("/relations/{relation_id}")
+async def delete_relation(relation_id: int, db: AsyncSession = Depends(get_db)) -> dict:
+    rel = await db.get(Relationship, relation_id)
+    if not rel:
+        raise HTTPException(status_code=404, detail="Связь не найдена")
+    await db.delete(rel)
+    await db.commit()
+    return {"status": "ok", "deleted_id": relation_id}
 
 
 @app.get("/agents/{agent_id}/relations", response_model=list[AgentRelationOut])
@@ -192,6 +330,26 @@ async def get_agent_mood(agent_id: int, db: AsyncSession = Depends(get_db)) -> M
     return MoodOut(text=agent.mood_text, emoji=agent.mood_emoji, color=agent.mood_color, score=agent.mood_score)
 
 
+@app.put("/agents/{agent_id}/mood", response_model=MoodOut)
+async def update_agent_mood(agent_id: int, payload: MoodUpdate, db: AsyncSession = Depends(get_db)) -> MoodOut:
+    agent = await db.get(Agent, agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Агент не найден")
+
+    data = payload.model_dump(exclude_unset=True)
+    if "text" in data and data["text"] is not None:
+        agent.mood_text = data["text"]
+    if "emoji" in data and data["emoji"] is not None:
+        agent.mood_emoji = data["emoji"]
+    if "color" in data and data["color"] is not None:
+        agent.mood_color = data["color"]
+    if "score" in data and data["score"] is not None:
+        agent.mood_score = data["score"]
+
+    await db.commit()
+    return MoodOut(text=agent.mood_text, emoji=agent.mood_emoji, color=agent.mood_color, score=agent.mood_score)
+
+
 @app.get("/agents/{agent_id}/plans", response_model=list[PlanOut])
 async def get_agent_plans(agent_id: int, db: AsyncSession = Depends(get_db)) -> list[PlanOut]:
     plans = list(
@@ -200,11 +358,22 @@ async def get_agent_plans(agent_id: int, db: AsyncSession = Depends(get_db)) -> 
                 select(Plan)
                 .where(Plan.agent_id == agent_id, Plan.active.is_(True))
                 .order_by(Plan.created_at.desc())
-                .limit(5)
+                .limit(10)
             )
         ).all()
     )
     return [PlanOut(text=p.text) for p in plans]
+
+
+@app.post("/agents/{agent_id}/plans", response_model=PlanOut)
+async def create_agent_plan(agent_id: int, payload: PlanCreate, db: AsyncSession = Depends(get_db)) -> PlanOut:
+    agent = await db.get(Agent, agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Агент не найден")
+    plan = Plan(agent_id=agent_id, text=payload.text, active=True)
+    db.add(plan)
+    await db.commit()
+    return PlanOut(text=plan.text)
 
 
 @app.get("/agents/{agent_id}/reflection")
@@ -218,18 +387,54 @@ async def get_agent_reflection(agent_id: int, db: AsyncSession = Depends(get_db)
     return agent.reflection
 
 
+@app.put("/agents/{agent_id}/reflection")
+async def update_agent_reflection(agent_id: int, payload: ReflectionUpdate, db: AsyncSession = Depends(get_db)) -> dict:
+    agent = await db.get(Agent, agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Агент не найден")
+    agent.reflection = payload.text
+    await db.commit()
+    return {"text": agent.reflection}
+
+
+@app.get("/events")
+async def get_events(limit: int = 50, db: AsyncSession = Depends(get_db)) -> list[dict]:
+    rows = list((await db.scalars(select(Event).order_by(Event.created_at.desc()).limit(max(1, min(limit, 500))))).all())
+    rows.reverse()
+    return [
+        {
+            "id": row.id,
+            "text": row.text,
+            "event_type": row.event_type,
+            "created_at": row.created_at,
+        }
+        for row in rows
+    ]
+
+
 @app.post("/events")
 async def create_event(payload: EventCreate, db: AsyncSession = Depends(get_db)) -> dict:
-    event = Event(text=payload.text.strip(), event_type="user_event")
+    text = payload.text.strip()
+    event = Event(text=text, event_type="user_event")
     db.add(event)
     agents = list((await db.scalars(select(Agent))).all())
     for agent in agents:
-        await add_memory(db, agent.id, f"Событие мира: {payload.text}", source="world")
-        agent.reflection = f"Произошло важное событие: {payload.text}. Нужно переосмыслить действия."
+        await add_memory(db, agent.id, f"Событие мира: {text}", source="world")
+        agent.reflection = f"Произошло важное событие: {text}. Нужно переосмыслить действия."
         agent.current_plan = "Адаптироваться к новому событию"
+    # Event is a single global prompt in chat, not one message per agent.
+    db.add(
+        ChatMessage(
+            sender_type="user",
+            sender_agent_id=None,
+            receiver_agent_id=None,
+            text=text,
+            topic="event",
+        )
+    )
+
     await db.commit()
 
-    response = {"id": event.id, "text": event.text, "event_type": event.event_type}
     payload_out = {
         "type": "event",
         "event_id": event.id,
@@ -239,7 +444,7 @@ async def create_event(payload: EventCreate, db: AsyncSession = Depends(get_db))
     }
     await event_bus.publish(payload_out)
     await ws_hub.broadcast(payload_out)
-    return response
+    return {"id": event.id, "text": event.text, "event_type": event.event_type}
 
 
 @app.post("/messages")
@@ -250,6 +455,15 @@ async def send_message(payload: MessageCreate, db: AsyncSession = Depends(get_db
 
     msg = Message(sender="user", agent_id=payload.agentId, text=payload.text.strip())
     db.add(msg)
+    db.add(
+        ChatMessage(
+            sender_type="user",
+            sender_agent_id=None,
+            receiver_agent_id=payload.agentId,
+            text=payload.text.strip(),
+            topic="direct",
+        )
+    )
     await add_memory(db, payload.agentId, f"Пользователь сказал: {payload.text}", source="user_message")
     agent.reflection = f"Пользователь написал мне: '{payload.text}'. Стоит ответить с учетом настроения."
     await db.commit()
@@ -265,16 +479,120 @@ async def send_message(payload: MessageCreate, db: AsyncSession = Depends(get_db
     return {"status": "ok", "agentId": payload.agentId}
 
 
-@app.post("/time-speed", response_model=TimeSpeedOut)
-async def set_time_speed(payload: TimeSpeedIn, db: AsyncSession = Depends(get_db)) -> TimeSpeedOut:
-    state = await db.get(SimulationState, 1)
-    if not state:
-        state = SimulationState(id=1, speed=payload.speed)
-        db.add(state)
-    else:
-        state.speed = payload.speed
+@app.get("/agents/{agent_id}/messages", response_model=list[MessageOut])
+async def get_agent_messages(agent_id: int, limit: int = 50, db: AsyncSession = Depends(get_db)) -> list[MessageOut]:
+    rows = list(
+        (
+            await db.scalars(
+                select(Message)
+                .where(Message.agent_id == agent_id)
+                .order_by(Message.created_at.desc())
+                .limit(max(1, min(limit, 500)))
+            )
+        ).all()
+    )
+    rows.reverse()
+    return [
+        MessageOut(id=row.id, sender=row.sender, agent_id=row.agent_id, text=row.text, created_at=row.created_at)
+        for row in rows
+    ]
+
+
+@app.get("/chat/messages", response_model=list[ChatMessageOut])
+async def get_chat_messages(limit: int = 50, db: AsyncSession = Depends(get_db)) -> list[ChatMessageOut]:
+    rows = list(
+        (
+            await db.scalars(
+                select(ChatMessage)
+                .order_by(ChatMessage.created_at.desc())
+                .limit(max(1, min(limit, 500)))
+            )
+        ).all()
+    )
+    rows.reverse()
+    return await _serialize_chat_messages(rows, db)
+
+
+@app.post("/chat/messages", response_model=ChatMessageOut)
+async def send_chat_message(payload: ChatMessageCreate, db: AsyncSession = Depends(get_db)) -> ChatMessageOut:
+    text = payload.text.strip()
+
+    sender_type = "user"
+    sender_agent_id = None
+    receiver_agent_id = payload.to_agent_id
+    if payload.from_agent_id is not None:
+        sender_type = "agent"
+        sender_agent_id = payload.from_agent_id
+
+    if sender_agent_id is not None:
+        sender_agent = await db.get(Agent, sender_agent_id)
+        if not sender_agent:
+            raise HTTPException(status_code=404, detail="Агент-отправитель не найден")
+
+    if receiver_agent_id is not None:
+        receiver_agent = await db.get(Agent, receiver_agent_id)
+        if not receiver_agent:
+            raise HTTPException(status_code=404, detail="Агент-получатель не найден")
+
+    row = ChatMessage(
+        sender_type=sender_type,
+        sender_agent_id=sender_agent_id,
+        receiver_agent_id=receiver_agent_id,
+        text=text,
+        topic=payload.topic,
+    )
+    db.add(row)
+
+    # Пользовательское сообщение в общий чат видят все агенты.
+    if sender_type == "user" and receiver_agent_id is None:
+        agents = list((await db.scalars(select(Agent))).all())
+        for agent in agents:
+            await add_memory(db, agent.id, f"Пользователь написал в чат: {text}", source="chat")
+
     await db.commit()
-    return TimeSpeedOut(speed=state.speed)
+    await db.refresh(row)
+
+    out = (await _serialize_chat_messages([row], db))[0]
+    payload_out = {
+        "type": "chat_message",
+        "id": out.id,
+        "sender_type": out.sender_type,
+        "sender_agent_id": out.sender_agent_id,
+        "sender_name": out.sender_name,
+        "receiver_agent_id": out.receiver_agent_id,
+        "receiver_name": out.receiver_name,
+        "text": out.text,
+        "topic": out.topic,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+    }
+    await event_bus.publish(payload_out)
+    await ws_hub.broadcast(payload_out)
+    return out
+
+
+@app.post("/chat/clear")
+async def clear_chat(db: AsyncSession = Depends(get_db)) -> dict:
+    result = await db.execute(delete(ChatMessage))
+    await db.commit()
+    deleted = int(result.rowcount or 0)
+    payload_out = {
+        "type": "chat_cleared",
+        "deleted_count": deleted,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+    }
+    await event_bus.publish(payload_out)
+    await ws_hub.broadcast(payload_out)
+    return {"status": "ok", "deleted_count": deleted}
+
+
+@app.post("/time-speed", response_model=TimeSpeedOut)
+async def set_time_speed_post(payload: TimeSpeedIn, db: AsyncSession = Depends(get_db)) -> TimeSpeedOut:
+    return await _set_time_speed(payload, db)
+
+
+@app.put("/time-speed", response_model=TimeSpeedOut)
+async def set_time_speed_put(payload: TimeSpeedIn, db: AsyncSession = Depends(get_db)) -> TimeSpeedOut:
+    return await _set_time_speed(payload, db)
 
 
 @app.get("/time-speed", response_model=TimeSpeedOut)
@@ -301,7 +619,6 @@ async def events_ws(ws: WebSocket):
     await ws_hub.connect(ws)
     try:
         while True:
-            # keep connection open; we only push server events
             await ws.receive_text()
     except Exception:
         await ws_hub.disconnect(ws)
@@ -380,9 +697,99 @@ async def ensure_relations_for_agent(db: AsyncSession, agent_id: int) -> None:
             db.add(Relationship(source_agent_id=other.id, target_agent_id=agent_id, score=0.5))
 
 
+async def _set_time_speed(payload: TimeSpeedIn, db: AsyncSession) -> TimeSpeedOut:
+    state = await db.get(SimulationState, 1)
+    if not state:
+        state = SimulationState(id=1, speed=payload.speed)
+        db.add(state)
+    else:
+        state.speed = payload.speed
+    await db.commit()
+    return TimeSpeedOut(speed=state.speed)
+
+
 def relation_label(score: float) -> tuple[str, str]:
     if score >= 0.7:
         return ("Симпатия", "#4CAF50")
     if score >= 0.4:
         return ("Нейтралитет", "#FFC107")
     return ("Антипатия", "#F44336")
+
+
+def _hash_password(password: str) -> str:
+    digest = hashlib.sha256(password.encode("utf-8")).hexdigest()
+    return f"sha256${digest}"
+
+
+def _verify_password(password: str, password_hash: str) -> bool:
+    expected = _hash_password(password)
+    return hmac.compare_digest(expected, password_hash)
+
+
+def _create_token(user_id: int) -> str:
+    now = datetime.now(tz=timezone.utc)
+    payload = {
+        "sub": str(user_id),
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(hours=settings.auth_token_expire_hours)).timestamp()),
+    }
+    return jwt.encode(payload, settings.auth_secret_key, algorithm="HS256")
+
+
+async def _get_current_user(credentials: HTTPAuthorizationCredentials | None, db: AsyncSession) -> User:
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Требуется авторизация")
+    token = credentials.credentials
+    try:
+        payload = jwt.decode(token, settings.auth_secret_key, algorithms=["HS256"])
+        user_id = int(payload.get("sub"))
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail="Невалидный токен") from exc
+
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="Пользователь не найден")
+    return user
+
+
+async def _serialize_chat_messages(rows: list[ChatMessage], db: AsyncSession) -> list[ChatMessageOut]:
+    agent_ids: set[int] = set()
+    for row in rows:
+        if row.sender_agent_id:
+            agent_ids.add(row.sender_agent_id)
+        if row.receiver_agent_id:
+            agent_ids.add(row.receiver_agent_id)
+
+    names: dict[int, str] = {}
+    if agent_ids:
+        agents = list((await db.scalars(select(Agent).where(Agent.id.in_(agent_ids)))).all())
+        names = {agent.id: agent.name for agent in agents}
+
+    out: list[ChatMessageOut] = []
+    for row in rows:
+        sender_name = "Пользователь"
+        if row.sender_type == "agent" and row.sender_agent_id:
+            sender_name = names.get(row.sender_agent_id, f"Agent {row.sender_agent_id}")
+        elif row.sender_type == "system":
+            sender_name = "Система"
+
+        receiver_name = None
+        if row.receiver_agent_id:
+            receiver_name = names.get(row.receiver_agent_id, f"Agent {row.receiver_agent_id}")
+
+        out.append(
+            ChatMessageOut(
+                id=row.id,
+                agentId=row.sender_agent_id,
+                sender_type=row.sender_type,
+                sender_agent_id=row.sender_agent_id,
+                sender_name=sender_name,
+                receiver_agent_id=row.receiver_agent_id,
+                receiver_name=receiver_name,
+                text=row.text,
+                topic=row.topic,
+                timestamp=row.created_at,
+                created_at=row.created_at,
+            )
+        )
+    return out

@@ -1,56 +1,66 @@
-﻿# Test your FastAPI endpoints
+﻿@base = http://127.0.0.1:8000
 
-GET http://127.0.0.1:8000/
-Accept: application/json
-
-###
-
-GET http://127.0.0.1:8000/health
-Accept: application/json
-
-###
-
-GET http://127.0.0.1:8000/agents
-Accept: application/json
-
-###
-
-POST http://127.0.0.1:8000/agents
+### Register
+POST {{base}}/auth/register
 Content-Type: application/json
 
 {
-  "name": "Тестовый Агент",
+  "username": "demo_user",
+  "email": "demo@example.com",
+  "password": "demo12345"
+}
+
+### Login
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "demo_user",
+  "password": "demo12345"
+}
+
+### Profile (replace TOKEN)
+GET {{base}}/auth/profile
+Authorization: Bearer TOKEN
+
+### Agents
+GET {{base}}/agents
+
+### Create agent
+POST {{base}}/agents
+Content-Type: application/json
+
+{
+  "name": "Chat Agent",
   "avatar": "🤖",
   "avatarColor": "#4CAF50",
   "avatarName": "Робот"
 }
 
-###
-
-DELETE http://127.0.0.1:8000/agents/1
-Accept: application/json
-
-###
-
-GET http://127.0.0.1:8000/llm/status
-Accept: application/json
-
-###
-
-GET http://127.0.0.1:8000/llm/providers
-Accept: application/json
-
-###
-
-PATCH http://127.0.0.1:8000/llm/config
+### Create event (bots discuss it)
+POST {{base}}/events
 Content-Type: application/json
 
 {
-  "provider": "deepseek",
-  "model": "deepseek/deepseek-v3.2"
+  "text": "Найден клад в северной пещере"
 }
 
-###
+### Get chat messages
+GET {{base}}/chat/messages?limit=100
 
-POST http://127.0.0.1:8000/llm/test
-Accept: application/json
+### Send message to global chat
+POST {{base}}/chat/messages
+Content-Type: application/json
+
+{
+  "text": "Как делим клад?",
+  "topic": "клад"
+}
+
+### Set time speed
+PUT {{base}}/time-speed
+Content-Type: application/json
+
+{
+  "speed": 1.5
+}

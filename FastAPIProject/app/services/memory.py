@@ -12,6 +12,8 @@ llm_service = get_llm_service()
 
 
 async def add_memory(session: AsyncSession, agent_id: int, content: str, source: str = "event") -> Memory:
+    # Cap memory size to prevent recursive memory inflation and token blowups.
+    content = _clip(content.strip(), 480)
     memory = Memory(
         agent_id=agent_id,
         content=content,
@@ -72,11 +74,29 @@ async def retrieve_relevant_memories(
     k: int = 5,
 ) -> list[str]:
     query_vector = embed_text(query)
-    stmt = (
+    stmt_main = (
         select(Memory)
-        .where(Memory.agent_id == agent_id)
+        .where(Memory.agent_id == agent_id, Memory.source != "summary")
         .order_by(Memory.embedding.cosine_distance(query_vector))
         .limit(k)
     )
-    rows = list((await session.scalars(stmt)).all())
-    return [row.content for row in rows]
+    rows = list((await session.scalars(stmt_main)).all())
+
+    # Keep one freshest summary if it exists, but avoid summary-of-summary cascades.
+    stmt_summary = (
+        select(Memory)
+        .where(Memory.agent_id == agent_id, Memory.source == "summary")
+        .order_by(Memory.created_at.desc())
+        .limit(1)
+    )
+    latest_summary = await session.scalar(stmt_summary)
+    result = [row.content for row in rows]
+    if latest_summary:
+        result.append(latest_summary.content)
+    return result[:k]
+
+
+def _clip(text: str, max_chars: int) -> str:
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars]

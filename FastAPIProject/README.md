@@ -111,3 +111,20 @@ LLM_DEBUG_LOG_MAX_CHARS=2500
 
 ## Примечание по фронтенду
 Фронт в `src/services/api.js` указывает `http://localhost:8000`, backend использует CORS для `localhost:3000`.
+
+## Added API for chat and auth
+- `POST /auth/register`
+- `POST /auth/login`
+- `GET /auth/profile`
+- `POST /auth/logout`
+- `GET /chat/messages?limit=50`
+- `POST /chat/messages`
+- `GET /agents/{id}/messages`
+- `PUT /agents/{id}`
+- `PUT /agents/{id}/mood`
+- `POST /agents/{id}/plans`
+- `PUT /agents/{id}/reflection`
+- `POST /relations`
+- `PUT /relations/{id}`
+- `DELETE /relations/{id}`
+- `PUT /time-speed`

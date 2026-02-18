@@ -10,7 +10,10 @@ class Settings(BaseSettings):
     app_host: str = "0.0.0.0"
     app_port: int = 8000
     app_log_level: str = "INFO"
+    auth_secret_key: str = "change-me-secret"
+    auth_token_expire_hours: int = 72
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000", "http://127.0.0.1:3000"])
+    cors_origin_regex: str = r"https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+)(:\d+)?$"
 
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/vivarium"
     memory_embedding_dim: int = 128
@@ -26,6 +29,14 @@ class Settings(BaseSettings):
     llm_temperature: float = 0.7
     llm_timeout_seconds: float = 45.0
     llm_max_tokens: int = 512
+    llm_step_llm_probability: float = 0.35
+    llm_dialogue_llm_probability: float = 0.45
+    llm_summary_llm_probability: float = 0.40
+    llm_agent_cooldown_seconds: int = 20
+    llm_max_memories_in_prompt: int = 3
+    llm_max_memory_chars: int = 180
+    llm_max_chat_context_messages: int = 4
+    llm_max_chat_context_chars: int = 140
     llm_debug_log_enabled: bool = True
     llm_debug_log_payload: bool = True
     llm_debug_log_response: bool = True

@@ -104,3 +104,30 @@ class SimulationState(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
     speed: Mapped[float] = mapped_column(Float, default=1.0)
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(String(120), unique=True, nullable=False, index=True)
+    email: Mapped[str] = mapped_column(String(200), unique=True, nullable=False, index=True)
+    password_hash: Mapped[str] = mapped_column(String(200), nullable=False)
+    avatar: Mapped[str] = mapped_column(String(32), default="👤")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    sender_type: Mapped[str] = mapped_column(String(20), default="agent")  # agent | user | system
+    sender_agent_id: Mapped[int | None] = mapped_column(ForeignKey("agents.id", ondelete="SET NULL"), nullable=True)
+    receiver_agent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("agents.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    topic: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)

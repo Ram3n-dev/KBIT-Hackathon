@@ -21,6 +21,14 @@ class AgentOut(BaseModel):
     avatarName: str = Field(alias="avatar_name")
 
 
+class AgentUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    avatar: str | None = None
+    avatarColor: str | None = None
+    avatarName: str | None = None
+    personality: str | None = None
+
+
 class RelationOut(BaseModel):
     from_agent: int = Field(alias="from")
     to_agent: int = Field(alias="to")
@@ -37,6 +45,18 @@ class AgentRelationOut(BaseModel):
     score: float
 
 
+class RelationCreate(BaseModel):
+    from_agent_id: int = Field(alias="from", ge=1)
+    to_agent_id: int = Field(alias="to", ge=1)
+    value: float = Field(ge=0, le=1)
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class RelationUpdate(BaseModel):
+    value: float = Field(ge=0, le=1)
+
+
 class MoodOut(BaseModel):
     text: str
     emoji: str
@@ -44,8 +64,19 @@ class MoodOut(BaseModel):
     score: float
 
 
+class MoodUpdate(BaseModel):
+    text: str | None = None
+    emoji: str | None = None
+    color: str | None = None
+    score: float | None = Field(default=None, ge=0, le=1)
+
+
 class PlanOut(BaseModel):
     text: str
+
+
+class PlanCreate(BaseModel):
+    text: str = Field(min_length=1)
 
 
 class EventCreate(BaseModel):
@@ -72,6 +103,10 @@ class MessageOut(BaseModel):
     created_at: datetime
 
 
+class ReflectionUpdate(BaseModel):
+    text: str = Field(min_length=1)
+
+
 class TimeSpeedIn(BaseModel):
     speed: float = Field(ge=0, le=2)
 
@@ -94,6 +129,10 @@ class LLMStatusOut(BaseModel):
     temperature: float
     max_tokens: int
     timeout_seconds: float
+    step_llm_probability: float | None = None
+    dialogue_llm_probability: float | None = None
+    summary_llm_probability: float | None = None
+    agent_cooldown_seconds: int | None = None
     has_deepseek_key: bool
     has_gigachat_auth_key: bool
     has_gigachat_access_token: bool
@@ -111,6 +150,14 @@ class LLMConfigPatch(BaseModel):
     temperature: float | None = Field(default=None, ge=0, le=2)
     max_tokens: int | None = Field(default=None, ge=32, le=4096)
     timeout_seconds: float | None = Field(default=None, ge=5, le=180)
+    step_llm_probability: float | None = Field(default=None, ge=0, le=1)
+    dialogue_llm_probability: float | None = Field(default=None, ge=0, le=1)
+    summary_llm_probability: float | None = Field(default=None, ge=0, le=1)
+    agent_cooldown_seconds: int | None = Field(default=None, ge=0, le=300)
+    max_memories_in_prompt: int | None = Field(default=None, ge=1, le=10)
+    max_memory_chars: int | None = Field(default=None, ge=60, le=1000)
+    max_chat_context_messages: int | None = Field(default=None, ge=1, le=12)
+    max_chat_context_chars: int | None = Field(default=None, ge=60, le=1000)
     deepseek_api_key: str | None = None
     deepseek_api_base: str | None = None
     gigachat_auth_key: str | None = None
@@ -132,3 +179,50 @@ class LLMTestOut(BaseModel):
     provider: str
     message: str
     latency_ms: int
+
+
+class AuthRegisterIn(BaseModel):
+    username: str = Field(min_length=3, max_length=120)
+    email: str = Field(min_length=5, max_length=200)
+    password: str = Field(min_length=6, max_length=200)
+
+
+class AuthLoginIn(BaseModel):
+    username: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=1, max_length=200)
+
+
+class UserOut(BaseModel):
+    id: int
+    username: str
+    email: str
+    avatar: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AuthOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
+
+
+class ChatMessageCreate(BaseModel):
+    text: str = Field(min_length=1)
+    topic: str | None = None
+    from_agent_id: int | None = None
+    to_agent_id: int | None = None
+
+
+class ChatMessageOut(BaseModel):
+    id: int
+    agentId: int | None = None
+    sender_type: str
+    sender_agent_id: int | None
+    sender_name: str
+    receiver_agent_id: int | None
+    receiver_name: str | None
+    text: str
+    topic: str | None
+    timestamp: datetime
+    created_at: datetime

@@ -1,7 +1,8 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import logging
+import random
 import time
 import uuid
 from dataclasses import dataclass
@@ -30,6 +31,16 @@ class LLMRuntimeConfig:
     temperature: float
     max_tokens: int
     timeout_seconds: float
+
+    step_llm_probability: float
+    dialogue_llm_probability: float
+    summary_llm_probability: float
+    agent_cooldown_seconds: int
+    max_memories_in_prompt: int
+    max_memory_chars: int
+    max_chat_context_messages: int
+    max_chat_context_chars: int
+
     llm_debug_log_enabled: bool
     llm_debug_log_payload: bool
     llm_debug_log_response: bool
@@ -59,6 +70,14 @@ class LLMService:
             temperature=settings.llm_temperature,
             max_tokens=settings.llm_max_tokens,
             timeout_seconds=settings.llm_timeout_seconds,
+            step_llm_probability=settings.llm_step_llm_probability,
+            dialogue_llm_probability=settings.llm_dialogue_llm_probability,
+            summary_llm_probability=settings.llm_summary_llm_probability,
+            agent_cooldown_seconds=settings.llm_agent_cooldown_seconds,
+            max_memories_in_prompt=settings.llm_max_memories_in_prompt,
+            max_memory_chars=settings.llm_max_memory_chars,
+            max_chat_context_messages=settings.llm_max_chat_context_messages,
+            max_chat_context_chars=settings.llm_max_chat_context_chars,
             llm_debug_log_enabled=settings.llm_debug_log_enabled,
             llm_debug_log_payload=settings.llm_debug_log_payload,
             llm_debug_log_response=settings.llm_debug_log_response,
@@ -95,6 +114,10 @@ class LLMService:
             "temperature": cfg.temperature,
             "max_tokens": cfg.max_tokens,
             "timeout_seconds": cfg.timeout_seconds,
+            "step_llm_probability": cfg.step_llm_probability,
+            "dialogue_llm_probability": cfg.dialogue_llm_probability,
+            "summary_llm_probability": cfg.summary_llm_probability,
+            "agent_cooldown_seconds": cfg.agent_cooldown_seconds,
             "has_deepseek_key": bool(cfg.deepseek_api_key),
             "has_gigachat_auth_key": bool(cfg.gigachat_auth_key),
             "has_gigachat_access_token": bool(cfg.gigachat_access_token or self._gigachat_token),
@@ -153,15 +176,18 @@ class LLMService:
     ) -> dict[str, Any] | None:
         if not self.is_enabled():
             return None
+        if random.random() > self._config.step_llm_probability:
+            return None
 
-        memory_text = "\n".join(f"- {m}" for m in memories[:5]) if memories else "- (нет воспоминаний)"
+        clipped_memories = [_clip_text(m, self._config.max_memory_chars) for m in memories[: self._config.max_memories_in_prompt]]
+        memory_text = "\n".join(f"- {m}" for m in clipped_memories) if clipped_memories else "- (нет воспоминаний)"
         user_prompt = (
             f"Агент: {actor_name}\n"
-            f"Личность: {actor_personality}\n"
-            f"Текущее настроение: {actor_mood}\n"
-            f"Взаимодействует с: {target_name}\n"
+            f"Личность: {_clip_text(actor_personality, 220)}\n"
+            f"Настроение: {actor_mood}\n"
+            f"Собеседник: {target_name}\n"
             f"Ключевые воспоминания:\n{memory_text}\n"
-            "Сгенерируй рефлексию, план и действие на текущий тик."
+            "Сгенерируй рефлексию, краткий план и действие на тик."
         )
 
         text = await self._chat(self._config.agent_system_prompt, user_prompt)
@@ -172,8 +198,47 @@ class LLMService:
     async def summarize_memories(self, memories: list[str]) -> str | None:
         if not self.is_enabled() or not memories:
             return None
-        user_prompt = "Эпизоды:\n" + "\n".join(f"- {m}" for m in memories[:12])
+        if random.random() > self._config.summary_llm_probability:
+            return None
+
+        clipped = [_clip_text(m, self._config.max_memory_chars) for m in memories[: max(4, self._config.max_memories_in_prompt)]]
+        user_prompt = "Эпизоды:\n" + "\n".join(f"- {m}" for m in clipped)
         text = await self._chat(self._config.summary_system_prompt, user_prompt)
+        return text.strip() if text else None
+
+    async def generate_dialogue_message(
+        self,
+        *,
+        actor_name: str,
+        actor_personality: str,
+        actor_mood: str,
+        target_name: str,
+        topic: str,
+        recent_messages: list[str],
+    ) -> str | None:
+        if not self.is_enabled():
+            return None
+        if random.random() > self._config.dialogue_llm_probability:
+            return None
+
+        clipped_history = [
+            _clip_text(item, self._config.max_chat_context_chars)
+            for item in recent_messages[-self._config.max_chat_context_messages :]
+        ]
+        history = "\n".join(f"- {m}" for m in clipped_history) if clipped_history else "- (нет истории)"
+        system_prompt = (
+            "Ты пишешь реплику в чате ботов. Стиль: неформально, как студенты, живо и по делу, без кринжа. "
+            "Верни только одну реплику на русском, без кавычек, 1-2 предложения."
+        )
+        user_prompt = (
+            f"Кто говорит: {actor_name}\n"
+            f"Личность: {_clip_text(actor_personality, 180)}\n"
+            f"Настроение: {actor_mood}\n"
+            f"Кому пишет: {target_name}\n"
+            f"Тема: {_clip_text(topic, 220)}\n"
+            f"Недавние сообщения:\n{history}"
+        )
+        text = await self._chat(system_prompt, user_prompt)
         return text.strip() if text else None
 
     async def _chat(self, system_prompt: str, user_prompt: str) -> str | None:
@@ -209,12 +274,7 @@ class LLMService:
         started = time.perf_counter()
 
         if cfg.llm_debug_log_enabled:
-            logger.info(
-                "deepseek request -> model=%s url=%s timeout=%s",
-                model,
-                url,
-                cfg.timeout_seconds,
-            )
+            logger.info("deepseek request -> model=%s url=%s timeout=%s", model, url, cfg.timeout_seconds)
             if cfg.llm_debug_log_payload:
                 logger.info(
                     "deepseek request payload: %s",
@@ -243,11 +303,7 @@ class LLMService:
             return None
 
         if cfg.llm_debug_log_enabled:
-            logger.info(
-                "deepseek response <- status=%s latency_ms=%s",
-                200,
-                int((time.perf_counter() - started) * 1000),
-            )
+            logger.info("deepseek response <- status=%s latency_ms=%s", 200, int((time.perf_counter() - started) * 1000))
             if cfg.llm_debug_log_response:
                 logger.info(
                     "deepseek response body: %s",
@@ -352,10 +408,14 @@ def _parse_agent_step_json(raw_text: str) -> dict[str, Any]:
     parsed = _safe_json_parse(text)
     if not isinstance(parsed, dict):
         return {"reflection": "", "plan": "", "action": "", "relation_delta": 0.0}
+
+    reflection = parsed.get("reflection", parsed.get("рефлексия", ""))
+    plan = parsed.get("plan", parsed.get("краткий_план", parsed.get("план", "")))
+    action = parsed.get("action", parsed.get("действие_на_тик", parsed.get("действие", "")))
     return {
-        "reflection": str(parsed.get("reflection", "")).strip(),
-        "plan": str(parsed.get("plan", "")).strip(),
-        "action": str(parsed.get("action", "")).strip(),
+        "reflection": str(reflection).strip(),
+        "plan": str(plan).strip(),
+        "action": str(action).strip(),
         "relation_delta": _clamp_delta(parsed.get("relation_delta", 0.0)),
     }
 

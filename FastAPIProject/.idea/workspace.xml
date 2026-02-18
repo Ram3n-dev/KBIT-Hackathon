@@ -8,18 +8,17 @@
       <change beforePath="$PROJECT_DIR$/../Backend/.idea/Vivarium.iml" beforeDir="false" afterPath="$PROJECT_DIR$/../Backend/.idea/Vivarium.iml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../Backend/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/../Backend/.idea/misc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../Backend/API/agents.py" beforeDir="false" afterPath="$PROJECT_DIR$/../Backend/API/agents.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.env.example" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/.gitignore" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/FastAPIProject.iml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/modules.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/app.env.example" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/config.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/models.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/schemas.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/schemas.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/services/llm.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/services/llm.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/services/memory.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/services/memory.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/services/simulation.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/services/simulation.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/test_main.http" beforeDir="false" afterPath="$PROJECT_DIR$/test_main.http" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -28,7 +27,7 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="3237" />
+    <option name="cachedIndexableFilesCount" value="3703" />
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -266,7 +265,12 @@
       <workItem from="1771341459236" duration="866000" />
       <workItem from="1771342376083" duration="765000" />
       <workItem from="1771343161294" duration="2040000" />
-      <workItem from="1771345251312" duration="346000" />
+      <workItem from="1771345251312" duration="1946000" />
+      <workItem from="1771347226930" duration="1052000" />
+      <workItem from="1771348323535" duration="1656000" />
+      <workItem from="1771350205667" duration="1920000" />
+      <workItem from="1771357773673" duration="2285000" />
+      <workItem from="1771385375015" duration="1681000" />
     </task>
     <servers />
   </component>
