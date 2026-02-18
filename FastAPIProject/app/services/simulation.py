@@ -9,10 +9,11 @@ from sqlalchemy import select
 
 from app.config import get_settings
 from app.database import SessionLocal
-from app.models import Agent, ChatMessage, Event, Memory, Plan, Relationship, SimulationState
+from app.models import Agent, ChatMessage, Event, Memory, Relationship, SimulationState
 from app.realtime import EventBus, WsHub
 from app.services.llm import get_llm_service
 from app.services.memory import add_memory, retrieve_relevant_memories
+from app.services.plans import compact_plan_text, normalize_plan_text, set_current_plan
 
 
 settings = get_settings()
@@ -180,7 +181,8 @@ class SimulationEngine:
                 logger.info("drop: repetitive sender=%s", actor.id)
                 return
 
-            plan_text = (llm_step or {}).get("plan") or f"Согласовать с {target.name} следующий практический шаг по теме '{topic}'."
+            default_plan = _build_default_plan(target.name, topic)
+            plan_text = compact_plan_text((llm_step or {}).get("plan") or "", fallback=default_plan)
             relation_delta = (llm_step or {}).get("relation_delta", random.uniform(-0.03, 0.06))
             try:
                 relation_delta = float(relation_delta)
@@ -192,7 +194,7 @@ class SimulationEngine:
                 f"Я веду разговор с {target.name} по теме '{topic}' и держу фокус на конкретных шагах."
             )
             actor.current_plan = plan_text
-            session.add(Plan(agent_id=actor.id, text=plan_text, active=True))
+            await set_current_plan(session, actor.id, plan_text)
 
             rel.score = max(0.0, min(1.0, rel.score + relation_delta))
             mood = _mood_from_relation(rel.score)
@@ -442,6 +444,15 @@ def _db_fit(text: str | None, max_len: int) -> str | None:
     if len(value) <= max_len:
         return value
     return value[: max_len - 1].rstrip() + "…"
+
+
+def _build_default_plan(target_name: str, topic: str) -> str:
+    normalized_topic = normalize_plan_text(topic).strip(" .")
+    if not normalized_topic:
+        return f"Согласовать с {target_name} следующий практический шаг."
+    if normalized_topic.lower().startswith("согласовать с"):
+        return normalized_topic if normalized_topic.endswith(".") else f"{normalized_topic}."
+    return f"Согласовать с {target_name} следующий практический шаг по теме '{normalized_topic}'."
 
 
 def _mood_from_relation(score: float) -> tuple[str, str, str, float]:

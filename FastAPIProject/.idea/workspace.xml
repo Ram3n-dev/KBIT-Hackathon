@@ -7,7 +7,6 @@
     <list default="true" id="62cab9b8-db8f-459f-8f5b-1268746568b9" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/services/llm.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/services/llm.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/services/simulation.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/services/simulation.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -266,7 +265,7 @@
       <workItem from="1771392166461" duration="1758000" />
       <workItem from="1771393993297" duration="1305000" />
       <workItem from="1771395344793" duration="1064000" />
-      <workItem from="1771397995040" duration="881000" />
+      <workItem from="1771397995040" duration="1627000" />
     </task>
     <servers />
   </component>

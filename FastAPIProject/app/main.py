@@ -58,6 +58,7 @@ from app.services.avatars import (
     is_valid_avatar_file,
 )
 from app.services.memory import add_memory, retrieve_relevant_memories
+from app.services.plans import compact_plan_text, set_current_plan
 from app.services.simulation import SimulationEngine
 
 
@@ -445,8 +446,9 @@ async def create_agent_plan(agent_id: int, payload: PlanCreate, db: AsyncSession
     agent = await db.get(Agent, agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Агент не найден")
-    plan = Plan(agent_id=agent_id, text=payload.text, active=True)
-    db.add(plan)
+    plan_text = compact_plan_text(payload.text, fallback=f"Согласовать следующий шаг с агентом {agent.name}.")
+    plan = await set_current_plan(db, agent_id, plan_text)
+    agent.current_plan = plan.text
     await db.commit()
     return PlanOut(text=plan.text)
 
