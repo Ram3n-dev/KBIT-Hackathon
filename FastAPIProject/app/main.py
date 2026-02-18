@@ -44,6 +44,7 @@ from app.schemas import (
     ReflectionUpdate,
     RelationCreate,
     RelationUpdate,
+    SimulationStatusOut,
     TimeSpeedIn,
     TimeSpeedOut,
     UserOut,
@@ -239,9 +240,33 @@ async def create_agent(payload: AgentCreate, db: AsyncSession = Depends(get_db))
     await db.flush()
     db.add(Plan(agent_id=agent.id, text="Осмотреться и познакомиться с окружающими", active=True))
     await add_memory(db, agent.id, f"Я появился в мире под именем {agent.name}.", source="birth")
+    greeting = f"Всем привет! Я {agent.name}, рад(а) быть в этом чате."
+    chat_greeting = ChatMessage(
+        sender_type="agent",
+        sender_agent_id=agent.id,
+        receiver_agent_id=None,
+        text=greeting,
+        topic="intro",
+    )
+    db.add(chat_greeting)
+    await add_memory(db, agent.id, f"Я поприветствовал(а) всех: {greeting}", source="chat")
     await ensure_relations_for_agent(db, agent.id)
     await db.commit()
     await db.refresh(agent)
+    payload_chat = {
+        "type": "chat_message",
+        "id": chat_greeting.id,
+        "sender_type": "agent",
+        "sender_agent_id": agent.id,
+        "sender_name": agent.name,
+        "receiver_agent_id": None,
+        "receiver_name": None,
+        "text": greeting,
+        "topic": "intro",
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+    }
+    await event_bus.publish(payload_chat)
+    await ws_hub.broadcast(payload_chat)
     return AgentOut.model_validate(agent)
 
 
@@ -463,37 +488,8 @@ async def get_events(limit: int = 50, db: AsyncSession = Depends(get_db)) -> lis
 
 @app.post("/events")
 async def create_event(payload: EventCreate, db: AsyncSession = Depends(get_db)) -> dict:
-    text = payload.text.strip()
-    event = Event(text=text, event_type="user_event")
-    db.add(event)
-    agents = list((await db.scalars(select(Agent))).all())
-    for agent in agents:
-        await add_memory(db, agent.id, f"Событие мира: {text}", source="world")
-        agent.reflection = f"Произошло важное событие: {text}. Нужно переосмыслить действия."
-        agent.current_plan = "Адаптироваться к новому событию"
-    # Event is a single global prompt in chat, not one message per agent.
-    db.add(
-        ChatMessage(
-            sender_type="user",
-            sender_agent_id=None,
-            receiver_agent_id=None,
-            text=text,
-            topic="event",
-        )
-    )
-
-    await db.commit()
-
-    payload_out = {
-        "type": "event",
-        "event_id": event.id,
-        "text": event.text,
-        "event_type": event.event_type,
-        "timestamp": datetime.utcnow().isoformat() + "Z",
-    }
-    await event_bus.publish(payload_out)
-    await ws_hub.broadcast(payload_out)
-    return {"id": event.id, "text": event.text, "event_type": event.event_type}
+    result = await _create_world_event(db, payload.text.strip())
+    return {"id": result["id"], "text": result["text"], "event_type": result["event_type"]}
 
 
 @app.post("/messages")
@@ -548,16 +544,11 @@ async def get_agent_messages(agent_id: int, limit: int = 50, db: AsyncSession = 
 
 
 @app.get("/chat/messages", response_model=list[ChatMessageOut])
-async def get_chat_messages(limit: int = 50, db: AsyncSession = Depends(get_db)) -> list[ChatMessageOut]:
-    rows = list(
-        (
-            await db.scalars(
-                select(ChatMessage)
-                .order_by(ChatMessage.created_at.desc())
-                .limit(max(1, min(limit, 500)))
-            )
-        ).all()
-    )
+async def get_chat_messages(limit: int = 50, after: int | None = None, db: AsyncSession = Depends(get_db)) -> list[ChatMessageOut]:
+    stmt = select(ChatMessage)
+    if after is not None:
+        stmt = stmt.where(ChatMessage.id > after)
+    rows = list((await db.scalars(stmt.order_by(ChatMessage.created_at.desc()).limit(max(1, min(limit, 500))))).all())
     rows.reverse()
     return await _serialize_chat_messages(rows, db)
 
@@ -565,6 +556,13 @@ async def get_chat_messages(limit: int = 50, db: AsyncSession = Depends(get_db))
 @app.post("/chat/messages", response_model=ChatMessageOut)
 async def send_chat_message(payload: ChatMessageCreate, db: AsyncSession = Depends(get_db)) -> ChatMessageOut:
     text = payload.text.strip()
+    message_type = (payload.type or "").strip().lower()
+    if message_type == "event" or (payload.topic or "").strip().lower() == "event":
+        result = await _create_world_event(db, text)
+        event_chat = await db.get(ChatMessage, result["chat_message_id"])
+        if not event_chat:
+            raise HTTPException(status_code=500, detail="Ошибка создания сообщения события")
+        return (await _serialize_chat_messages([event_chat], db))[0]
 
     sender_type = "user"
     sender_agent_id = None
@@ -572,6 +570,8 @@ async def send_chat_message(payload: ChatMessageCreate, db: AsyncSession = Depen
     if payload.from_agent_id is not None:
         sender_type = "agent"
         sender_agent_id = payload.from_agent_id
+    if sender_agent_id is not None and receiver_agent_id is not None and sender_agent_id == receiver_agent_id:
+        raise HTTPException(status_code=400, detail="Агент не может писать самому себе")
 
     if sender_agent_id is not None:
         sender_agent = await db.get(Agent, sender_agent_id)
@@ -829,6 +829,7 @@ async def _serialize_chat_messages(rows: list[ChatMessage], db: AsyncSession) ->
         out.append(
             ChatMessageOut(
                 id=row.id,
+                type=_chat_message_type(row),
                 agentId=row.sender_agent_id,
                 sender_type=row.sender_type,
                 sender_agent_id=row.sender_agent_id,
@@ -842,3 +843,129 @@ async def _serialize_chat_messages(rows: list[ChatMessage], db: AsyncSession) ->
             )
         )
     return out
+
+
+@app.get("/simulation/status", response_model=SimulationStatusOut)
+async def simulation_status() -> SimulationStatusOut:
+    return SimulationStatusOut(running=sim_engine.is_running())
+
+
+@app.post("/simulation/start", response_model=SimulationStatusOut)
+async def simulation_start() -> SimulationStatusOut:
+    sim_engine.set_running(True)
+    return SimulationStatusOut(running=True)
+
+
+@app.post("/simulation/stop", response_model=SimulationStatusOut)
+async def simulation_stop() -> SimulationStatusOut:
+    sim_engine.set_running(False)
+    return SimulationStatusOut(running=False)
+
+
+async def _create_world_event(db: AsyncSession, text: str) -> dict:
+    event = Event(text=text, event_type="user_event")
+    db.add(event)
+    agents = list((await db.scalars(select(Agent))).all())
+    for agent in agents:
+        await add_memory(db, agent.id, f"Событие мира: {text}", source="world")
+        agent.reflection = f"Произошло важное событие: {text}. Нужно переосмыслить действия."
+        agent.current_plan = "Адаптироваться к новому событию"
+    await _apply_event_mood_updates(db, text, agents)
+
+    event_chat = ChatMessage(
+        sender_type="system",
+        sender_agent_id=None,
+        receiver_agent_id=None,
+        text=text,
+        topic="event",
+    )
+    db.add(event_chat)
+    await db.commit()
+
+    payload_event = {
+        "type": "event",
+        "event_id": event.id,
+        "text": event.text,
+        "event_type": event.event_type,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+    }
+    payload_chat = {
+        "type": "chat_message",
+        "id": event_chat.id,
+        "sender_type": "system",
+        "sender_agent_id": None,
+        "sender_name": "Система",
+        "receiver_agent_id": None,
+        "receiver_name": None,
+        "text": event_chat.text,
+        "topic": "event",
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+    }
+    await event_bus.publish(payload_event)
+    await event_bus.publish(payload_chat)
+    await ws_hub.broadcast(payload_event)
+    await ws_hub.broadcast(payload_chat)
+    return {"id": event.id, "text": event.text, "event_type": event.event_type, "chat_message_id": event_chat.id}
+
+
+async def _apply_event_mood_updates(db: AsyncSession, event_text: str, agents: list[Agent]) -> None:
+    text = event_text.lower()
+    angry_keywords = [
+        "плохое настроение",
+        "зл",
+        "бесит",
+        "раздраж",
+        "в ярости",
+        "сердит",
+        "грустит",
+        "подавлен",
+        "расстроен",
+        "тревож",
+    ]
+    calm_keywords = ["успоко", "рад", "счаст", "вдохнов", "весел", "доволен"]
+    group_words = ["все", "каждый", "друг с другом", "между собой"]
+    conflict_words = ["поссор", "конфликт", "руга", "ненавид", "вражду"]
+
+    group_conflict = any(w in text for w in group_words) and any(w in text for w in conflict_words)
+    if group_conflict:
+        for agent in agents:
+            agent.mood_text = "Раздражен"
+            agent.mood_emoji = "😠"
+            agent.mood_color = "#F44336"
+            agent.mood_score = 0.15
+            await add_memory(
+                db,
+                agent.id,
+                f"Глобальное событие ухудшило атмосферу и мое настроение: {event_text}",
+                source="event_mood",
+            )
+        rels = list((await db.scalars(select(Relationship))).all())
+        for rel in rels:
+            rel.score = max(0.0, rel.score - 0.22)
+
+    for agent in agents:
+        if agent.name.lower() not in text:
+            continue
+        if any(k in text for k in angry_keywords):
+            agent.mood_text = "Тревожный"
+            agent.mood_emoji = "😟"
+            agent.mood_color = "#FF9800"
+            agent.mood_score = 0.22
+            await add_memory(db, agent.id, f"Событие повлияло на мое настроение: {event_text}", source="event_mood")
+        elif any(k in text for k in calm_keywords):
+            agent.mood_text = "Воодушевленный"
+            agent.mood_emoji = "✨"
+            agent.mood_color = "#8BC34A"
+            agent.mood_score = 0.75
+            await add_memory(db, agent.id, f"Событие улучшило мое настроение: {event_text}", source="event_mood")
+
+
+def _chat_message_type(row: ChatMessage) -> str:
+    if row.topic == "event":
+        return "event"
+    if row.sender_type == "agent":
+        return "agent"
+    if row.sender_type == "user":
+        return "user"
+    return "system"
+    SimulationStatusOut,

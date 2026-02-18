@@ -82,7 +82,7 @@ async def retrieve_relevant_memories(
     )
     rows = list((await session.scalars(stmt_main)).all())
 
-    # Keep one freshest summary if it exists, but avoid summary-of-summary cascades.
+
     stmt_summary = (
         select(Memory)
         .where(Memory.agent_id == agent_id, Memory.source == "summary")

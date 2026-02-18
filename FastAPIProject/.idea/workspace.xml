@@ -6,6 +6,10 @@
   <component name="ChangeListManager">
     <list default="true" id="62cab9b8-db8f-459f-8f5b-1268746568b9" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/schemas.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/schemas.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/services/memory.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/services/memory.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/services/simulation.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/services/simulation.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -13,7 +17,7 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="3703" />
+    <option name="cachedIndexableFilesCount" value="3709" />
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -258,6 +262,8 @@
       <workItem from="1771357773673" duration="2285000" />
       <workItem from="1771385375015" duration="1999000" />
       <workItem from="1771387443893" duration="2246000" />
+      <workItem from="1771390174144" duration="1230000" />
+      <workItem from="1771391722129" duration="176000" />
     </task>
     <servers />
   </component>

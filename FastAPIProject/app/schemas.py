@@ -86,6 +86,7 @@ class PlanCreate(BaseModel):
 
 class EventCreate(BaseModel):
     text: str = Field(min_length=1)
+    type: str | None = "event"
 
 
 class EventOut(BaseModel):
@@ -215,12 +216,14 @@ class AuthOut(BaseModel):
 class ChatMessageCreate(BaseModel):
     text: str = Field(min_length=1)
     topic: str | None = None
+    type: str | None = None
     from_agent_id: int | None = None
     to_agent_id: int | None = None
 
 
 class ChatMessageOut(BaseModel):
     id: int
+    type: str
     agentId: int | None = None
     sender_type: str
     sender_agent_id: int | None
@@ -231,3 +234,7 @@ class ChatMessageOut(BaseModel):
     topic: str | None
     timestamp: datetime
     created_at: datetime
+
+
+class SimulationStatusOut(BaseModel):
+    running: bool

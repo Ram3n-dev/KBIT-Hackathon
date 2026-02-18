@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from app.config import get_settings
 from app.database import SessionLocal
-from app.models import Agent, ChatMessage, Event, Plan, Relationship, SimulationState
+from app.models import Agent, ChatMessage, Event, Memory, Plan, Relationship, SimulationState
 from app.realtime import EventBus, WsHub
 from app.services.llm import get_llm_service
 from app.services.memory import add_memory, retrieve_relevant_memories
@@ -55,6 +55,7 @@ class SimulationEngine:
         self._llm = get_llm_service()
         self._last_step_llm_at: dict[int, datetime] = {}
         self._last_dialogue_llm_at: dict[int, datetime] = {}
+        self._running = True
 
     async def start(self) -> None:
         if self._task and not self._task.done():
@@ -67,8 +68,17 @@ class SimulationEngine:
         if self._task:
             await self._task
 
+    def set_running(self, running: bool) -> None:
+        self._running = running
+
+    def is_running(self) -> bool:
+        return self._running
+
     async def _run(self) -> None:
         while not self._stop.is_set():
+            if not self._running:
+                await asyncio.sleep(0.5)
+                continue
             try:
                 await self._tick()
             except Exception:
@@ -121,9 +131,15 @@ class SimulationEngine:
             except Exception:
                 relation_delta = random.uniform(-0.08, 0.12)
 
-            event_topic = await _latest_user_event_topic(session)
-            if event_topic and random.random() < 0.85:
-                topic = event_topic
+            latest_event = await _latest_user_event(session, actor.created_at)
+            force_event_reaction = False
+            if latest_event and not await _has_agent_reacted_to_event(session, actor.id, latest_event.id):
+                force_event_reaction = True
+
+            if force_event_reaction:
+                topic = latest_event.text
+            elif latest_event and random.random() < 0.2:
+                topic = latest_event.text
             else:
                 topic = random.choice(TOPICS)
             recent_chat = await _recent_chat_context(session, actor.id, target.id)
@@ -139,7 +155,7 @@ class SimulationEngine:
                 )
                 if llm_chat:
                     self._last_dialogue_llm_at[actor.id] = datetime.utcnow()
-            chat_text = llm_chat or f"{target.name}, я {action}. Короче, давай обсудим: {topic}."
+            chat_text = llm_chat or _fallback_chat_message(target.name, action, topic)
             chat_text = chat_text.strip()
             if await _is_duplicate_chat(session, actor.id, target.id, chat_text):
                 return
@@ -172,6 +188,13 @@ class SimulationEngine:
             await add_memory(session, target.id, f"{actor.name} написал мне: {chat_text}", source="chat")
             await add_memory(session, actor.id, event_text, source="agent_action")
             await add_memory(session, target.id, f"{actor.name}: {event_text}", source="social")
+            if force_event_reaction and latest_event:
+                await add_memory(
+                    session,
+                    actor.id,
+                    f"Я отреагировал на событие: {latest_event.text}",
+                    source=f"evt_rx_{latest_event.id}",
+                )
             await session.commit()
 
             payload_event = {
@@ -253,7 +276,7 @@ async def _is_duplicate_chat(session, sender_id: int, receiver_id: int, text: st
     return new_text == old_text
 
 
-async def _latest_user_event_topic(session) -> str | None:
+async def _latest_user_event(session, not_before: datetime | None = None) -> Event | None:
     stmt = (
         select(Event)
         .where(Event.event_type == "user_event")
@@ -263,6 +286,8 @@ async def _latest_user_event_topic(session) -> str | None:
     latest = await session.scalar(stmt)
     if not latest:
         return None
+    if not_before is not None and latest.created_at < not_before:
+        return None
 
     created_at = latest.created_at
     if created_at.tzinfo is not None:
@@ -270,9 +295,26 @@ async def _latest_user_event_topic(session) -> str | None:
 
     # Event is considered "active topic" for a limited window.
     age_seconds = (datetime.utcnow() - created_at).total_seconds()
-    if age_seconds > 30 * 60:
+    if age_seconds > 10 * 60:
         return None
-    return latest.text
+    return latest
+
+
+async def _has_agent_reacted_to_event(session, agent_id: int, event_id: int) -> bool:
+    marker = f"evt_rx_{event_id}"
+    stmt = select(Memory.id).where(Memory.agent_id == agent_id, Memory.source == marker).limit(1)
+    row = await session.scalar(stmt)
+    return row is not None
+
+
+def _fallback_chat_message(target_name: str, action: str, topic: str) -> str:
+    variants = [
+        f"{target_name}, я {action}. По теме: {topic}. Что думаешь?",
+        f"{target_name}, у меня мысль по поводу '{topic}'. Давай коротко сверим позиции.",
+        f"{target_name}, после того что произошло ({topic}), нужно договориться как действуем дальше.",
+        f"{target_name}, это важно: {topic}. Я предлагаю обсудить спокойно и по делу.",
+    ]
+    return random.choice(variants)
 
 
 def _mood_from_relation(score: float) -> tuple[str, str, str, float]:
