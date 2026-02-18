@@ -17,7 +17,8 @@ class Agent(Base):
     __tablename__ = "agents"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(120), nullable=False, unique=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
     avatar: Mapped[str] = mapped_column(String(64), default="yellow_slime.svg")
     avatar_color: Mapped[str] = mapped_column(String(24), default="#4CAF50")
     avatar_name: Mapped[str] = mapped_column(String(120), default="Р РѕР±РѕС‚")
@@ -84,6 +85,7 @@ class Event(Base):
     __tablename__ = "events"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=True)
     text: Mapped[str] = mapped_column(Text, nullable=False)
     event_type: Mapped[str] = mapped_column(String(32), default="world")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
@@ -102,7 +104,13 @@ class Message(Base):
 class SimulationState(Base):
     __tablename__ = "simulation_state"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        unique=True,
+        index=True,
+        nullable=True,
+    )
     speed: Mapped[float] = mapped_column(Float, default=1.0)
 
 
@@ -121,6 +129,7 @@ class ChatMessage(Base):
     __tablename__ = "chat_messages"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=True)
     sender_type: Mapped[str] = mapped_column(String(20), default="agent")  # agent | user | system
     sender_agent_id: Mapped[int | None] = mapped_column(ForeignKey("agents.id", ondelete="SET NULL"), nullable=True)
     receiver_agent_id: Mapped[int | None] = mapped_column(
